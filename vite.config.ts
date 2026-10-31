@@ -30,6 +30,9 @@ export default defineConfig({
     host: true,
     port: 8100,
     cors: true,
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/App.tsx', './src/pages/Login.tsx', './src/pages/ClientHome.tsx'],
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

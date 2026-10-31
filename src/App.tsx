@@ -1,13 +1,14 @@
 import React, { Suspense, lazy } from 'react';
 import { IonApp, IonRouterOutlet, IonSplitPane, IonSpinner, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { Redirect, Route, useLocation } from 'react-router-dom';
+import { Redirect, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Menu from './components/Menu';
 import Login from './pages/Login';
 import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { SplashScreen } from './components/SplashScreen';
 import { RoleThemeController } from './components/RoleThemeController';
 import { RequireAuth } from './components/routing/RouteGuards';
 import { useHomeFlags } from './services/platformSettings';
@@ -113,14 +114,6 @@ const BenefitsRoute: React.FC = () => {
   return <LazyBenefitsPage />;
 };
 
-const ClientBenefitsRoute: React.FC = () => {
-  const flags = useHomeFlags('client');
-  if (!flags.benefits) {
-    return <Redirect to="/cliente/inicio" />;
-  }
-  return <LazyBenefitsPage />;
-};
-
 const ClientServicesRoute: React.FC = () => {
   const flags = useHomeFlags('client');
   if (!flags.services) {
@@ -180,6 +173,8 @@ const AppSplitPane: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 const App: React.FC = () => {
   return (
     <IonApp>
+      {/* Pantalla de inicio con logo durante 5 s antes de mostrar la app */}
+      <SplashScreen />
       <AuthProvider>
         <IonReactRouter>
           {/* ── Dynamic Theme Controller (Rojo Cliente / Azul Profesional) ── */}
@@ -260,10 +255,9 @@ const App: React.FC = () => {
                   <LazyPqrPage />
                 </RequireAuth>
               </Route>
+              {/* Beneficios y descuentos son exclusivos del perfil profesional */}
               <Route path="/cliente/beneficios" exact={true}>
-                <RequireAuth role="client">
-                  <ClientBenefitsRoute />
-                </RequireAuth>
+                <Redirect to="/cliente/inicio" />
               </Route>
               <Route path="/tienda" exact={true}>
                 <LazyStorePage />

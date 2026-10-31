@@ -43,11 +43,16 @@ if errorlevel 1 (
 )
 
 echo [3/4] Verificando base de datos SQLite y migraciones...
-python manage.py migrate --no-input
+python manage.py migrate --check >nul 2>&1
 if errorlevel 1 (
-  echo ERROR: Fallo la migracion de base de datos.
-  pause
-  exit /b 1
+  echo Aplicando migraciones pendientes...
+  python manage.py migrate --no-input
+  if errorlevel 1 (
+    echo ERROR: Fallo la migracion de base de datos.
+    pause
+    exit /b 1
+  )
+  del ".seed_done" >nul 2>&1
 )
 
 findstr /B "EMAIL_HOST=" "%~dp0..\.env" >nul 2>&1
@@ -55,8 +60,15 @@ if errorlevel 1 (
   echo AVISO: Los correos de recuperacion saldran en consola ^(no hay SMTP configurado^).
 )
 
-echo [4/4] Verificando datos demo de la base de datos...
-python seed_demo.py >nul 2>&1
+:: Los datos demo solo se cargan una vez (el seed es lento por el hash de contrasenas).
+:: Para recargarlos: borrar backend\.seed_done o ejecutar python seed_demo.py
+if exist ".seed_done" (
+  echo [4/4] Datos demo ya cargados.
+) else (
+  echo [4/4] Cargando datos demo de la base de datos ^(solo la primera vez^)...
+  python seed_demo.py >nul 2>&1
+  if not errorlevel 1 echo ok>".seed_done"
+)
 
 echo.
 echo ======================================================

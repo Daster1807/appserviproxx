@@ -31,9 +31,9 @@ import {
   shieldCheckmarkOutline, shieldCheckmarkSharp,
   giftOutline, giftSharp,
   cartOutline, cartSharp,
+  addCircleOutline, addCircleSharp,
   logOutOutline,
   swapHorizontalOutline,
-  chatbubbleEllipsesOutline,
   closeOutline,
 } from 'ionicons/icons';
 
@@ -58,11 +58,11 @@ const storePage: AppPage = {
   mdIcon: cartSharp,
 };
 
-const clientBenefitsPage: AppPage = {
-  title: 'Beneficios y puntos',
-  url: '/cliente/beneficios',
-  iosIcon: giftOutline,
-  mdIcon: giftSharp,
+const publishStorePage: AppPage = {
+  title: 'Publicar en tienda',
+  url: '/tienda?action=publish',
+  iosIcon: addCircleOutline,
+  mdIcon: addCircleSharp,
 };
 
 const proBenefitsPage: AppPage = {
@@ -82,11 +82,18 @@ const proPqrPage: AppPage = {
 const Menu: React.FC = () => {
   const location = useLocation();
   const router = useIonRouter();
-  const { becomeClient, becomeProfessional, becomeStaff, isAuthenticated, isLoading, logout, user } = useAuth();
+  const { becomeClient, becomeProfessional, isAuthenticated, isLoading, logout, user } = useAuth();
   const [roleChangeError, setRoleChangeError] = React.useState('');
   const [roleChanging, setRoleChanging] = React.useState(false);
 
   const isActive = (url: string) => {
+    const isPublishing = location.search.includes('action=publish');
+    if (url === '/tienda?action=publish') {
+      return location.pathname === '/tienda' && isPublishing;
+    }
+    if (url === '/tienda' && isPublishing) {
+      return false;
+    }
     if (url === '/cliente/solicitudes' && (location.pathname === '/solicitudes' || location.pathname === '/mis-solicitudes' || location.pathname === '/reservas')) {
       return true;
     }
@@ -100,8 +107,10 @@ const Menu: React.FC = () => {
     try {
       await menuController.close();
       await menuController.close('main-menu');
-    } catch {}
-    const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as any;
+    } catch {
+      /* el menú ya estaba cerrado */
+    }
+    const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as HTMLIonMenuElement | null;
     if (menuEl && typeof menuEl.close === 'function') {
       menuEl.close();
     }
@@ -153,15 +162,18 @@ const Menu: React.FC = () => {
     '/cliente/favoritos': 'favorites',
     '/cliente/viviendas': 'homes',
     '/cliente/pqrs': 'pqr',
+    '/cliente/perfil': 'profile',
     '/tienda': 'store',
-    '/cliente/beneficios': 'benefits',
+    '/tienda?action=publish': 'publish_store',
   };
 
   const proUrlFlag: Record<string, string> = {
+    '/perfil': 'profile',
     '/profesional/solicitudes': 'requests',
     '/profesional/trabajos': 'jobs',
     '/profesional/disponibilidad': 'availability',
     '/tienda': 'store',
+    '/tienda?action=publish': 'publish_store',
     '/profesional/beneficios': 'benefits',
     '/profesional/pqrs': 'pqr',
   };
@@ -176,16 +188,13 @@ const Menu: React.FC = () => {
       ? [{ title: 'Servicios', url: '/cliente/servicios', iosIcon: constructOutline, mdIcon: constructSharp }]
       : []),
     ...(platform.features.products !== false
-      ? [storePage]
+      ? [storePage, publishStorePage]
       : []),
     ...(platform.features.hirings !== false
       ? [{ title: 'Mis solicitudes', url: '/cliente/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp }]
       : []),
     { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
     { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
-    ...(platform.features.benefits !== false
-      ? [clientBenefitsPage]
-      : []),
     ...(platform.features.pqr !== false
       ? [{ title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp }]
       : []),
@@ -196,7 +205,7 @@ const Menu: React.FC = () => {
   const proPagesList: AppPage[] = [
     { title: 'Página Principal', url: '/profesional/inicio', iosIcon: homeOutline, mdIcon: homeSharp },
     ...(platform.features.products !== false
-      ? [storePage]
+      ? [storePage, publishStorePage]
       : []),
     ...(platform.features.hirings !== false
       ? [{ title: 'Mis solicitudes', url: '/profesional/solicitudes', iosIcon: calendarClearOutline, mdIcon: calendarClearSharp }]
@@ -263,8 +272,10 @@ const Menu: React.FC = () => {
                 try {
                   await menuController.close();
                   await menuController.close('main-menu');
-                } catch {}
-                const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as any;
+                } catch {
+                  /* el menú ya estaba cerrado */
+                }
+                const menuEl = document.querySelector('ion-menu[menu-id="main-menu"]') as HTMLIonMenuElement | null;
                 if (menuEl && typeof menuEl.close === 'function') {
                   menuEl.close();
                 }
@@ -401,7 +412,11 @@ const Menu: React.FC = () => {
               onClick={async (event) => {
                 event.stopPropagation();
                 await becomeClient();
-                try { await menuController.close('main-menu'); } catch {}
+                try {
+                  await menuController.close('main-menu');
+                } catch {
+                  /* el menú ya estaba cerrado */
+                }
                 router.push('/cliente/inicio');
               }}
             >

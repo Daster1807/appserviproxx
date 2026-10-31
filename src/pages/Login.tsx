@@ -29,7 +29,7 @@ import { usePlatformSettings } from "../services/platformSettings";
 import { getEntryRoute, isUserAdmin } from "../utils/routes";
 import { ServerConnectionModal } from "../components/ServerConnectionModal";
 import logo from "../Assets/logo.png";
-import imagemain from "../Assets/imag/Categorías de servicios para el hogar.png";
+import imagemain from "../Assets/imag/categorias-servicios-hogar.jpg";
 import contractorImage from "../Assets/imag/contratista .png";
 import { BlockedAccountModal } from "../components/BlockedAccountModal";
 import type { BlockedAccountInfo } from "../types/serviprox";
@@ -106,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ administrative = false, pageClassName = "
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(true);
+  const [showLoginForm, setShowLoginForm] =   useState(administrative);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isAdminLogin, setIsAdminLogin] = useState(administrative);
   const [serverModalOpen, setServerModalOpen] = useState(false);
