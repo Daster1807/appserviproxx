@@ -11,7 +11,6 @@ import { AppearanceTab } from "./settings/AppearanceTab";
 import { NotificationsTab } from "./settings/NotificationsTab";
 import { PaymentsTab } from "./settings/PaymentsTab";
 import { SecurityTab } from "./settings/SecurityTab";
-import { IntegrationsTab } from "./settings/IntegrationsTab";
 import { AppParamsTab } from "./settings/AppParamsTab";
 import { MaintenanceTab } from "./settings/MaintenanceTab";
 import type { ConfirmRequest, FieldDef, TabProps } from "./settings/ui";
@@ -57,7 +56,6 @@ const TAB_SECTIONS: Record<string, { section: string; Component: React.FC<TabPro
   Notificaciones: { section: "notifications", Component: NotificationsTab },
   "Métodos de pago": { section: "payments", Component: PaymentsTab },
   Seguridad: { section: "security", Component: SecurityTab },
-  Integraciones: { section: "integrations", Component: IntegrationsTab },
   "Personalización": { section: "appearance", Component: AppearanceTab },
   "Parámetros de la app": { section: "app_params", Component: AppParamsTab },
   Mantenimiento: { section: "maintenance", Component: MaintenanceTab },
@@ -75,7 +73,6 @@ const TABS = [
   "Notificaciones",
   "Métodos de pago",
   "Seguridad",
-  "Integraciones",
   "Personalización",
   "Parámetros de la app",
   "Mantenimiento",

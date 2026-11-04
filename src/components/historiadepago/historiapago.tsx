@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IonBadge,
   IonButton,
@@ -7,6 +7,7 @@ import {
   IonHeader,
   IonIcon,
   IonMenuButton,
+  IonModal,
   IonPage,
   IonSpinner,
   IonTitle,
@@ -14,11 +15,26 @@ import {
   IonToolbar,
 } from "@ionic/react";
 import { useLocation } from "react-router-dom";
-import { cardOutline, checkmarkCircleOutline, refreshOutline } from "ionicons/icons";
+import {
+  cardOutline,
+  checkmarkCircleOutline,
+  closeOutline,
+  printOutline,
+  receiptOutline,
+  refreshOutline,
+} from "ionicons/icons";
 import { useAuth } from "../../context/AuthContext";
 import { orderService } from "../../services/serviprox";
+import {
+  financeService,
+  formatDate,
+  formatMoney as formatCop,
+  type ClientPaymentRow,
+  type PaymentStatus,
+} from "../../services/finance";
 import type { Order } from "../../types/serviprox";
 import "../../pages/RolePages.css";
+import "../finanzas/finanzas.css";
 
 import "./historiadepago.css";
 
@@ -34,7 +50,24 @@ const formatMoney = (value: string | null) => {
 };
 
 const paymentColor = (paymentStatus: Order["payment_status"]) =>
-  paymentStatus === "paid" ? "success" : "warning";
+  paymentStatus === "paid" ? "success" : paymentStatus === "refunded" ? "medium" : "warning";
+
+const historyColor = (status: PaymentStatus) =>
+  status === "approved"
+    ? "success"
+    : status === "pending"
+      ? "warning"
+      : status === "refunded"
+        ? "medium"
+        : "danger";
+
+const HISTORY_FILTERS: Array<[string, string]> = [
+  ["all", "Todos"],
+  ["approved", "Aprobados"],
+  ["pending", "Pendientes"],
+  ["declined", "Rechazados"],
+  ["refunded", "Reembolsados"],
+];
 
 const PaymentPage: React.FC = () => {
   const location = useLocation();
@@ -46,6 +79,20 @@ const PaymentPage: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [history, setHistory] = useState<ClientPaymentRow[]>([]);
+  const [historyError, setHistoryError] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [receipt, setReceipt] = useState<ClientPaymentRow | null>(null);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      setHistory(await financeService.clientHistory());
+      setHistoryError(false);
+    } catch {
+      setHistoryError(true);
+    }
+  }, []);
 
   const loadOrders = async () => {
     setLoading(true);
@@ -58,7 +105,7 @@ const PaymentPage: React.FC = () => {
       } else {
         const payload = await orderService.list();
         setOrders(payload);
-        setSelectedOrder(payload[0] || null);
+        setSelectedOrder(payload.find((order) => order.payment_status === "pending") || payload[0] || null);
       }
     } catch {
       setError("No pudimos cargar la información de pago.");
@@ -69,7 +116,8 @@ const PaymentPage: React.FC = () => {
 
   useEffect(() => {
     void loadOrders();
-  }, [orderId]);
+    void loadHistory();
+  }, [orderId, loadHistory]);
 
   // Wompi confirma por webhook: tras volver del checkout se consulta unos segundos.
   useEffect(() => {
@@ -81,13 +129,16 @@ const PaymentPage: React.FC = () => {
         const next = await orderService.get(orderId);
         setSelectedOrder(next);
         setOrders([next]);
-        if (next.payment_status === "paid" || tries >= 6) window.clearInterval(timer);
+        if (next.payment_status === "paid" || tries >= 6) {
+          window.clearInterval(timer);
+          void loadHistory();
+        }
       } catch {
         window.clearInterval(timer);
       }
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [orderId, selectedOrder?.payment_status]);
+  }, [orderId, selectedOrder?.payment_status, loadHistory]);
 
   const payWithWompi = async () => {
     if (!selectedOrder || processing) return;
@@ -115,6 +166,7 @@ const PaymentPage: React.FC = () => {
         current.map((order) => (order.id === nextOrder.id ? nextOrder : order))
       );
       setToast("Pago confirmado en modo desarrollo");
+      void loadHistory();
     } catch {
       setError("No pudimos confirmar el pago de esta orden.");
     } finally {
@@ -181,6 +233,22 @@ const PaymentPage: React.FC = () => {
     </article>
   );
 
+  const pendingOrders = orders.filter((order) => order.payment_status === "pending");
+  const focusedPaidOrder =
+    orderId && selectedOrder && selectedOrder.payment_status !== "pending" ? selectedOrder : null;
+
+  const filteredHistory = history.filter((row) => {
+    if (statusFilter !== "all" && row.status !== statusFilter) return false;
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [row.service, row.professional, row.reference, row.method].some((value) =>
+      value.toLowerCase().includes(query)
+    );
+  });
+  const totalPaid = history
+    .filter((row) => row.status === "approved")
+    .reduce((sum, row) => sum + row.amount, 0);
+
   return (
     <IonPage>
       <IonHeader>
@@ -188,7 +256,7 @@ const PaymentPage: React.FC = () => {
           <IonButtons slot="start">
             <IonMenuButton autoHide={false} menu="main-menu" />
           </IonButtons>
-          <IonTitle>Pago de orden</IonTitle>
+          <IonTitle>Historial de pagos</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -196,35 +264,188 @@ const PaymentPage: React.FC = () => {
         <main className="sp-role-page">
           <header className="sp-role-header">
             <span className="sp-role-kicker">CLIENTE</span>
-            <h1>Pago de orden</h1>
-            <p>El pago se registra sobre la orden aceptada, separado del estado de la solicitud.</p>
+            <h1>Historial de pagos</h1>
+            <p>Consulta los servicios contratados, tus pagos, su estado y descarga tus comprobantes.</p>
           </header>
 
           {user?.role !== "client" ? (
             <section className="sp-card sp-empty">
-              Solo el cliente de la orden puede confirmar pagos.
-            </section>
-          ) : loading ? (
-            <div className="sp-card sp-route-loading">
-              <IonSpinner name="crescent" />
-              <span>Cargando orden...</span>
-            </div>
-          ) : error ? (
-            <section className="sp-card">
-              <p className="sp-error">{error}</p>
-              <IonButton onClick={() => void loadOrders()}>
-                <IonIcon slot="start" icon={refreshOutline} />
-                Reintentar
-              </IonButton>
-            </section>
-          ) : selectedOrder ? (
-            <section className="sp-payment-list">
-              {orders.map(renderOrder)}
+              Solo el cliente de la orden puede consultar sus pagos.
             </section>
           ) : (
-            <section className="sp-card sp-empty">No tienes órdenes aceptadas para pagar.</section>
+            <>
+              {loading ? (
+                <div className="sp-card sp-route-loading">
+                  <IonSpinner name="crescent" />
+                  <span>Cargando orden...</span>
+                </div>
+              ) : error ? (
+                <section className="sp-card">
+                  <p className="sp-error">{error}</p>
+                  <IonButton onClick={() => void loadOrders()}>
+                    <IonIcon slot="start" icon={refreshOutline} />
+                    Reintentar
+                  </IonButton>
+                </section>
+              ) : pendingOrders.length > 0 || focusedPaidOrder ? (
+                <section className="sp-payment-list">
+                  <h2 className="fin-section-title">Pagos por realizar</h2>
+                  {(focusedPaidOrder ? [focusedPaidOrder] : pendingOrders).map(renderOrder)}
+                </section>
+              ) : null}
+
+              <section className="fin-kpis" aria-label="Resumen de pagos">
+                <div className="sp-card fin-kpi">
+                  <span>Total pagado</span>
+                  <strong>{formatCop(totalPaid)}</strong>
+                </div>
+                <div className="sp-card fin-kpi">
+                  <span>Pagos realizados</span>
+                  <strong>{history.filter((row) => row.status === "approved").length}</strong>
+                </div>
+                <div className="sp-card fin-kpi">
+                  <span>Pendientes</span>
+                  <strong>{history.filter((row) => row.status === "pending").length}</strong>
+                </div>
+              </section>
+
+              <section className="sp-card fin-history">
+                <div className="fin-toolbar">
+                  <h2 className="fin-section-title">Transacciones</h2>
+                  <IonButton fill="clear" size="small" onClick={() => void loadHistory()}>
+                    <IonIcon slot="start" icon={refreshOutline} />
+                    Actualizar
+                  </IonButton>
+                </div>
+                <div className="fin-filters">
+                  {HISTORY_FILTERS.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`fin-chip ${statusFilter === value ? "is-active" : ""}`}
+                      onClick={() => setStatusFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <input
+                    type="search"
+                    className="fin-search"
+                    placeholder="Buscar por servicio, profesional o referencia"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    aria-label="Buscar pagos"
+                  />
+                </div>
+
+                {historyError && (
+                  <p className="sp-error">No pudimos cargar tu historial de pagos.</p>
+                )}
+
+                {filteredHistory.length === 0 ? (
+                  <p className="sp-muted fin-empty">
+                    {history.length === 0
+                      ? "Aún no has realizado pagos."
+                      : "No hay pagos que coincidan con el filtro."}
+                  </p>
+                ) : (
+                  <div className="fin-table-wrap">
+                    <table className="fin-table">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Servicio</th>
+                          <th>Valor</th>
+                          <th>Método</th>
+                          <th>Estado</th>
+                          <th>Referencia</th>
+                          <th>Comprobante</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHistory.map((row) => (
+                          <tr key={row.id}>
+                            <td data-label="Fecha">{formatDate(row.date)}</td>
+                            <td data-label="Servicio">
+                              <strong>{row.service}</strong>
+                              <small>
+                                {row.professional} · Orden #{row.order_id}
+                              </small>
+                            </td>
+                            <td data-label="Valor">{formatCop(row.amount)}</td>
+                            <td data-label="Método">{row.method}</td>
+                            <td data-label="Estado">
+                              <IonBadge color={historyColor(row.status)}>{row.status_label}</IonBadge>
+                            </td>
+                            <td data-label="Referencia" className="fin-mono">
+                              {row.reference}
+                            </td>
+                            <td data-label="Comprobante">
+                              {row.receipt_available ? (
+                                <IonButton fill="outline" size="small" onClick={() => setReceipt(row)}>
+                                  <IonIcon slot="start" icon={receiptOutline} />
+                                  Ver
+                                </IonButton>
+                              ) : (
+                                <span className="sp-muted">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </>
           )}
         </main>
+
+        <IonModal isOpen={!!receipt} onDidDismiss={() => setReceipt(null)} className="fin-receipt-modal">
+          <IonHeader>
+            <IonToolbar>
+              <IonTitle>Comprobante de pago</IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setReceipt(null)} aria-label="Cerrar">
+                  <IonIcon icon={closeOutline} />
+                </IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding">
+            {receipt && (
+              <div className="fin-receipt" id="fin-receipt-print">
+                <h2>Serviprox</h2>
+                <p className="sp-muted">Comprobante de pago · {receipt.reference}</p>
+                <dl>
+                  <dt>Estado</dt>
+                  <dd>{receipt.status_label}</dd>
+                  <dt>Fecha de la transacción</dt>
+                  <dd>{formatDate(receipt.date)}</dd>
+                  <dt>Cliente</dt>
+                  <dd>
+                    {receipt.client_name} ({receipt.client_email})
+                  </dd>
+                  <dt>Servicio contratado</dt>
+                  <dd>
+                    {receipt.service} · Orden #{receipt.order_id}
+                  </dd>
+                  <dt>Profesional</dt>
+                  <dd>{receipt.professional}</dd>
+                  <dt>Método de pago</dt>
+                  <dd>{receipt.method}</dd>
+                  <dt>Valor pagado</dt>
+                  <dd className="fin-receipt-total">{formatCop(receipt.amount)}</dd>
+                </dl>
+                <IonButton expand="block" className="sp-primary-button fin-no-print" onClick={() => window.print()}>
+                  <IonIcon slot="start" icon={printOutline} />
+                  Imprimir o guardar como PDF
+                </IonButton>
+              </div>
+            )}
+          </IonContent>
+        </IonModal>
+
         <IonToast
           isOpen={!!toast}
           message={toast}

@@ -49,7 +49,7 @@ def transition(order: Order, new_status: str, user=None, note: str = "") -> Orde
 def confirm_development_payment(order: Order, user=None) -> Order:
     """Marca como pagada una orden real para desarrollo/demo, sin pasarela externa."""
     order = Order.objects.select_for_update().get(pk=order.pk)
-    if order.payment_status == Order.PaymentStatus.PAID:
+    if order.payment_status != Order.PaymentStatus.PENDING:
         return order
     order.payment_status = Order.PaymentStatus.PAID
     order.payment_confirmed_at = timezone.now()
@@ -62,6 +62,10 @@ def confirm_development_payment(order: Order, user=None) -> Order:
             "updated_at",
         ]
     )
+    from .finance import ensure_dev_payment, register_split
+
+    payment = ensure_dev_payment(order, user)
+    register_split(order, payment.amount_in_cents / 100)
     return order
 
 

@@ -35,6 +35,8 @@ import {
   logOutOutline,
   swapHorizontalOutline,
   closeOutline,
+  cardOutline, cardSharp,
+  walletOutline, walletSharp,
 } from 'ionicons/icons';
 
 
@@ -195,6 +197,7 @@ const Menu: React.FC = () => {
       : []),
     { title: 'Favoritos', url: '/cliente/favoritos', iosIcon: heartOutline, mdIcon: heartSharp },
     { title: 'Mis viviendas', url: '/cliente/viviendas', iosIcon: businessOutline, mdIcon: businessSharp },
+    { title: 'Historial de pagos', url: '/cliente/historialpago', iosIcon: cardOutline, mdIcon: cardSharp },
     ...(platform.features.pqr !== false
       ? [{ title: 'PQRS & Quejas', url: '/cliente/pqrs', iosIcon: shieldCheckmarkOutline, mdIcon: shieldCheckmarkSharp }]
       : []),
@@ -216,6 +219,7 @@ const Menu: React.FC = () => {
     ...(platform.features.benefits !== false
       ? [proBenefitsPage]
       : []),
+    { title: 'Mis ingresos', url: '/profesional/ingresos', iosIcon: walletOutline, mdIcon: walletSharp },
     ...(platform.features.pqr !== false
       ? [proPqrPage]
       : []),

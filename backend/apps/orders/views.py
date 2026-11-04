@@ -3,7 +3,6 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 import mimetypes
 
 from django.http import FileResponse
@@ -15,9 +14,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.platform_views import IsPlatformStaff
 from apps.accounts.models import PlatformSettings
 
+from .finance import apply_payment_update
 from .models import Order, Payment, Review, WorkEvidence
 from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerializer
 from .services import InvalidTransition, confirm_development_payment, transition
@@ -71,7 +70,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if order.client_id != request.user.id:
             return Response({"detail": "Solo el cliente de la orden puede pagarla."}, status=status.HTTP_403_FORBIDDEN)
-        if order.payment_status == Order.PaymentStatus.PAID:
+        if order.payment_status != Order.PaymentStatus.PENDING:
             return Response({"detail": "La orden ya está pagada."}, status=status.HTTP_400_BAD_REQUEST)
         if not wompi_ready():
             return Response({"detail": "Wompi no está configurado en el servidor."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -178,44 +177,17 @@ class WompiEventsView(APIView):
         new_status = WOMPI_STATUS.get(tx.get("status"))
         if not payment or not new_status:
             return Response({"detail": "Sin cambios."})
-        if payment.status == Payment.Status.APPROVED:
+        if payment.status in (Payment.Status.APPROVED, Payment.Status.REFUNDED):
             return Response({"detail": "Pago ya registrado."})
         if tx.get("amount_in_cents") != payment.amount_in_cents or tx.get("currency") != payment.currency:
             payment.status = Payment.Status.ERROR
             payment.save(update_fields=["status", "updated_at"])
             return Response({"detail": "Monto no coincide."})
 
-        payment.status = new_status
-        payment.wompi_transaction_id = str(tx.get("id", ""))[:80]
-        payment.payment_method = str(tx.get("payment_method_type", ""))[:40]
-        payment.save()
-
-        if new_status == Payment.Status.APPROVED:
-            order = Order.objects.select_for_update().get(pk=payment.order_id)
-            order.payment_status = Order.PaymentStatus.PAID
-            order.payment_confirmed_at = timezone.now()
-            order.payment_reference = payment.reference
-            order.save(update_fields=["payment_status", "payment_confirmed_at", "payment_reference", "updated_at"])
-        return Response({"detail": "Evento procesado."})
-
-
-class AdminPaymentListView(APIView):
-    permission_classes = [IsPlatformStaff]
-
-    def get(self, request):
-        rows = Payment.objects.select_related("client", "order")[:20]
-        return Response(
-            [
-                {
-                    "id": p.id,
-                    "date": p.created_at.isoformat(),
-                    "reference": p.reference,
-                    "method": p.payment_method or "—",
-                    "user": (p.client.get_full_name() or p.client.email) if p.client else "—",
-                    "amount": p.amount_in_cents / 100,
-                    "status": p.status,
-                    "status_label": p.get_status_display(),
-                }
-                for p in rows
-            ]
+        apply_payment_update(
+            payment,
+            new_status,
+            transaction_id=tx.get("id", ""),
+            method=tx.get("payment_method_type", ""),
         )
+        return Response({"detail": "Evento procesado."})

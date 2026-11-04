@@ -291,7 +291,7 @@ export interface RequestOrder {
   payment_confirmed_at: string | null;
 }
 
-export type OrderPaymentStatus = "pending" | "paid";
+export type OrderPaymentStatus = "pending" | "paid" | "refunded";
 
 export interface Order {
   id: number;

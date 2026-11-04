@@ -2154,6 +2154,11 @@
   cursor: pointer;
 }
 
+.ad-ben-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .ad-ben-page-btn.active {
   background: #2563eb;
   border-color: #2563eb;
