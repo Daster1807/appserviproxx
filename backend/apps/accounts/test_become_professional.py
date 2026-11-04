@@ -86,3 +86,34 @@ class BecomeProfessionalCertificateTests(TestCase):
         stranger.force_authenticate(user=self.stranger)
         self.assertEqual(stranger.get(url).status_code, 404)
         self.assertEqual(APIClient().get(url).status_code, 401)
+
+    def register(self, **extra):
+        data = {
+            "email": "nuevo@cert.example",
+            "username": "nuevo.pro",
+            "password": "Registro-Pro-Test-81!",
+            "role": UserRole.PROFESSIONAL,
+        }
+        data.update(extra)
+        return APIClient().post("/api/v1/auth/register/", data, format="multipart")
+
+    def test_professional_registration_requires_certificate(self):
+        response = self.register()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("certificate", response.data)
+        self.assertFalse(User.objects.filter(email="nuevo@cert.example").exists())
+
+        fake = self.register(profession="Plomero", certificate=SimpleUploadedFile("falso.pdf", b"nada"))
+        self.assertEqual(fake.status_code, 400)
+
+    def test_professional_registration_stores_certificate(self):
+        response = self.register(profession="Plomero", certificate=SimpleUploadedFile("t.pdf", PDF))
+        self.assertEqual(response.status_code, 201, response.data)
+        profile = ProfessionalProfile.objects.get(user__email="nuevo@cert.example")
+        self.assertEqual(profile.certificate_profession, "Plomero")
+        self.assertTrue(profile.certificate_file)
+        self.assertFalse(profile.is_verified)
+
+    def test_client_registration_does_not_need_certificate(self):
+        response = self.register(role=UserRole.CLIENT, email="cli@cert.example", username="cli.nuevo")
+        self.assertEqual(response.status_code, 201, response.data)

@@ -21,12 +21,14 @@ from .finance import (
     method_label,
     monthly_series,
     money,
+    order_price,
     platform_summary,
     professional_balance,
     resolve_refund,
     resolve_withdrawal,
     settle_orders,
 )
+from .holds import CLIENT_HOLD_MESSAGE, PROFESSIONAL_HOLD_MESSAGE, unpaid_completed_orders
 from .models import Order, Payment, Refund, Withdrawal
 from .wompi import wompi_ready
 
@@ -94,6 +96,35 @@ def related_payments():
         "order__service_request__selected_service",
         "order__service_request__selected_category",
     )
+
+
+class PaymentHoldView(APIView):
+    """Indica si la cuenta está suspendida por un servicio terminado sin pagar."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        role = "professional" if getattr(user, "role", "") == "professional" else "client"
+        orders = unpaid_completed_orders(user).select_related(
+            "service_request__selected_service", "service_request__selected_category"
+        )
+        if role == "client":
+            orders = orders.filter(client=user)
+        else:
+            orders = orders.filter(professional__user=user)
+        items = [
+            {
+                "order_id": o.id,
+                "service": service_label(o),
+                "amount": num(order_price(o)),
+            }
+            for o in orders[:20]
+        ]
+        message = ""
+        if items:
+            message = CLIENT_HOLD_MESSAGE if role == "client" else PROFESSIONAL_HOLD_MESSAGE
+        return Response({"hold": bool(items), "role": role, "message": message, "orders": items})
 
 
 # ── Cliente ─────────────────────────────────────────────────────────────────

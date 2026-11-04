@@ -140,11 +140,11 @@ const PaymentPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [orderId, selectedOrder?.payment_status, loadHistory]);
 
-  const payWithWompi = async () => {
-    if (!selectedOrder || processing) return;
+  const payWithWompi = async (target: Order) => {
+    if (processing) return;
     setProcessing(true);
     try {
-      const { checkout_url } = await orderService.wompiCheckout(selectedOrder.id);
+      const { checkout_url } = await orderService.wompiCheckout(target.id);
       if (!checkout_url.startsWith("https://checkout.wompi.co/")) {
         throw new Error("URL de pago inválida");
       }
@@ -155,20 +155,20 @@ const PaymentPage: React.FC = () => {
     }
   };
 
-  const confirmPayment = async () => {
-    if (!selectedOrder || processing) return;
+  const confirmPayment = async (target: Order) => {
+    if (processing) return;
     setProcessing(true);
     setError("");
     try {
-      const nextOrder = await orderService.confirmDemoPayment(selectedOrder.id);
+      const nextOrder = await orderService.confirmDemoPayment(target.id);
       setSelectedOrder(nextOrder);
       setOrders((current) =>
         current.map((order) => (order.id === nextOrder.id ? nextOrder : order))
       );
       setToast("Pago confirmado en modo desarrollo");
       void loadHistory();
-    } catch {
-      setError("No pudimos confirmar el pago de esta orden.");
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "No pudimos confirmar el pago de esta orden.");
     } finally {
       setProcessing(false);
     }
@@ -195,31 +195,26 @@ const PaymentPage: React.FC = () => {
           {order.status_label}
         </span>
       </div>
-      {order.payment_status === "pending" ? (
+      {order.payment_status === "pending" && order.status !== "completed" ? (
+        <p className="sp-muted">
+          El pago se habilita cuando el profesional termine el trabajo. Si el servicio termina
+          sin pago, tu cuenta y la del profesional quedan suspendidas hasta que pagues.
+        </p>
+      ) : order.payment_status === "pending" ? (
         <div className="sp-payment-demo">
           <IonButton
             className="sp-primary-button"
-            onClick={payWithWompi}
+            onClick={() => void payWithWompi(order)}
             disabled={
-              processing ||
-              selectedOrder?.id !== order.id ||
-              !(order.final_price || order.estimate_max || order.estimate_min)
+              processing || !(order.final_price || order.estimate_max || order.estimate_min)
             }
           >
-            {processing && selectedOrder?.id === order.id ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              "Pagar con Wompi"
-            )}
+            {processing ? <IonSpinner name="crescent" /> : "Pagar con Wompi"}
           </IonButton>
           {import.meta.env.DEV && (
             <>
               <p>Confirmación simulada solo para desarrollo. No genera un cobro real.</p>
-              <IonButton
-                fill="outline"
-                onClick={confirmPayment}
-                disabled={processing || selectedOrder?.id !== order.id}
-              >
+              <IonButton fill="outline" onClick={() => void confirmPayment(order)} disabled={processing}>
                 Confirmar pago demo
               </IonButton>
             </>
@@ -233,9 +228,11 @@ const PaymentPage: React.FC = () => {
     </article>
   );
 
-  const pendingOrders = orders.filter((order) => order.payment_status === "pending");
-  const focusedPaidOrder =
-    orderId && selectedOrder && selectedOrder.payment_status !== "pending" ? selectedOrder : null;
+  // Solo se cobran servicios ya terminados; con ?order= se muestra esa orden aunque aún no aplique.
+  const pendingOrders = orders.filter(
+    (order) => order.payment_status === "pending" && order.status === "completed"
+  );
+  const focusedOrder = orderId && selectedOrder ? selectedOrder : null;
 
   const filteredHistory = history.filter((row) => {
     if (statusFilter !== "all" && row.status !== statusFilter) return false;
@@ -287,10 +284,10 @@ const PaymentPage: React.FC = () => {
                     Reintentar
                   </IonButton>
                 </section>
-              ) : pendingOrders.length > 0 || focusedPaidOrder ? (
+              ) : pendingOrders.length > 0 || focusedOrder ? (
                 <section className="sp-payment-list">
                   <h2 className="fin-section-title">Pagos por realizar</h2>
-                  {(focusedPaidOrder ? [focusedPaidOrder] : pendingOrders).map(renderOrder)}
+                  {(focusedOrder ? [focusedOrder] : pendingOrders).map(renderOrder)}
                 </section>
               ) : null}
 

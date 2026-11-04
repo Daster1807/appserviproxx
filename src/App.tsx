@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import ClientHome from './pages/ClientHome';
 import { GlobalChatButton } from './components/GlobalChatButton';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { PaymentHoldBanner } from './components/PaymentHoldBanner';
 import { SplashScreen } from './components/SplashScreen';
 import { RoleThemeController } from './components/RoleThemeController';
 import { RequireAuth } from './components/routing/RouteGuards';
@@ -395,6 +396,9 @@ const App: React.FC = () => {
 
           {/* ── Global Database & Backend Connection Monitor ── */}
           <ConnectionBanner />
+
+          {/* ── Aviso de suspensión por servicio terminado sin pagar ── */}
+          <PaymentHoldBanner />
 
         </IonReactRouter>
       </AuthProvider>

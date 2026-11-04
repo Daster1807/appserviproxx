@@ -17,6 +17,7 @@ import {
 import {
   arrowBackOutline,
   cameraOutline,
+  cardOutline,
   carOutline,
   checkmarkCircleOutline,
   homeOutline,
@@ -878,6 +879,36 @@ const WorkTrackingPage: React.FC = () => {
                   {statusLabels[status]}
                 </button>
               ))}
+            </section>
+          )}
+
+          {/* Pago: se habilita al terminar el trabajo */}
+          {currentStatus === "completed" && order.payment_status === "pending" && (
+            <section className="tracking-card">
+              <div className="tracking-card-heading">
+                <span>Pago pendiente</span>
+              </div>
+              {isProfessional ? (
+                <p style={{ fontSize: "0.9rem", margin: "6px 0 0" }}>
+                  Terminaste el trabajo. Tu cuenta queda suspendida hasta que el cliente pague; se
+                  reactiva automáticamente al confirmarse el pago.
+                </p>
+              ) : (
+                <>
+                  <p style={{ fontSize: "0.9rem", margin: "6px 0 12px" }}>
+                    El profesional terminó el trabajo. Paga ahora para reactivar tu cuenta y la del
+                    profesional.
+                  </p>
+                  <IonButton
+                    expand="block"
+                    className="sp-primary-button"
+                    routerLink={`/cliente/historialpago?order=${order.id}`}
+                  >
+                    <IonIcon slot="start" icon={cardOutline} />
+                    Pagar servicio
+                  </IonButton>
+                </>
+              )}
             </section>
           )}
 

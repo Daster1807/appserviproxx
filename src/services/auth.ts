@@ -26,8 +26,18 @@ export const authService = {
     return api.get<User>("auth/me/");
   },
 
-  register: (payload: RegisterPayload) =>
-    api.post<User>("auth/register/", payload, { auth: false }),
+  register: (payload: RegisterPayload) => {
+    if (!payload.certificate) {
+      return api.post<User>("auth/register/", payload, { auth: false });
+    }
+    const form = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        form.append(key, value instanceof File ? value : String(value));
+      }
+    });
+    return api.post<User>("auth/register/", form, { auth: false });
+  },
 
   requestPasswordReset: (email: string) =>
     api.post<{ detail: string }>("auth/password-reset/request/", { email }, { auth: false }),

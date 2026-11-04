@@ -22,6 +22,8 @@ from .serializers import OrderCreateSerializer, OrderSerializer, ReviewSerialize
 from .services import InvalidTransition, confirm_development_payment, transition
 from .wompi import build_checkout_url, verify_event, wompi_ready
 
+PAY_AFTER_COMPLETION = "El pago se habilita cuando el profesional termina el trabajo."
+
 WOMPI_STATUS = {
     "APPROVED": Payment.Status.APPROVED,
     "DECLINED": Payment.Status.DECLINED,
@@ -72,6 +74,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Solo el cliente de la orden puede pagarla."}, status=status.HTTP_403_FORBIDDEN)
         if order.payment_status != Order.PaymentStatus.PENDING:
             return Response({"detail": "La orden ya está pagada."}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status != Order.Status.COMPLETED:
+            return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
         if not wompi_ready():
             return Response({"detail": "Wompi no está configurado en el servidor."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         payments_cfg = PlatformSettings.load()["sections"].get("payments", {})
@@ -108,6 +112,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {"detail": "Solo el cliente de la orden puede confirmar el pago."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        if order.payment_status == Order.PaymentStatus.PENDING and order.status != Order.Status.COMPLETED:
+            return Response({"detail": PAY_AFTER_COMPLETION}, status=status.HTTP_400_BAD_REQUEST)
         order = confirm_development_payment(order, user=request.user)
         return Response(OrderSerializer(order, context=self.get_serializer_context()).data)
 

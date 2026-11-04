@@ -140,7 +140,15 @@ const reportQuery = (from: string, to: string, extra = "") => {
   return query ? `?${query}` : "";
 };
 
+export interface PaymentHold {
+  hold: boolean;
+  role: "client" | "professional";
+  message: string;
+  orders: Array<{ order_id: number; service: string; amount: number }>;
+}
+
 export const financeService = {
+  paymentHold: () => api.get<PaymentHold>("payments/hold/"),
   clientHistory: () => api.get<ClientPaymentRow[]>("payments/history/"),
 
   earnings: () => api.get<ProfessionalEarnings>("professional/earnings/"),

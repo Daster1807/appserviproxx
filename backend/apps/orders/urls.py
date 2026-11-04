@@ -13,6 +13,7 @@ from .finance_views import (
     AdminWithdrawalListView,
     AdminWithdrawalResolveView,
     ClientPaymentHistoryView,
+    PaymentHoldView,
     ProfessionalEarningsView,
     ProfessionalWithdrawalView,
 )
@@ -25,6 +26,7 @@ router.register("reviews", ReviewViewSet, basename="review")
 urlpatterns = [
     path("payments/wompi/events/", WompiEventsView.as_view(), name="wompi-events"),
     path("payments/history/", ClientPaymentHistoryView.as_view(), name="payment-history"),
+    path("payments/hold/", PaymentHoldView.as_view(), name="payment-hold"),
     path("professional/earnings/", ProfessionalEarningsView.as_view(), name="professional-earnings"),
     path("professional/withdrawals/", ProfessionalWithdrawalView.as_view(), name="professional-withdrawals"),
     path("admin/payments/", AdminPaymentListView.as_view(), name="admin-payments"),

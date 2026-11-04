@@ -83,9 +83,9 @@ export interface RegisterPayload {
   address?: string;
   role: PublicRegisterRole;
   password: string;
+  profession?: string;
+  certificate?: File;
 }
-
-export interface Service {
   id: number;
   category: number;
   category_slug: string;

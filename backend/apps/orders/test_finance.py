@@ -59,9 +59,9 @@ class FinanceFlowTests(TestCase):
         return api
 
     def pay_and_complete(self, order):
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
         response = self.as_user(self.client_user).post(f"/api/v1/orders/{order.id}/confirm-demo-payment/")
         self.assertEqual(response.status_code, 200, response.data)
-        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
 
     def test_client_history_lists_payment_with_receipt_data(self):
         order = self.make_order()
@@ -144,6 +144,31 @@ class FinanceFlowTests(TestCase):
         self.assertEqual(Payment.objects.get(order=order).status, Payment.Status.REFUNDED)
         self.assertEqual(pro.get("/api/v1/professional/earnings/").data["summary"]["available_balance"], 0)
         self.assertEqual(self.as_user(self.client_user).post(f"/api/v1/orders/{order.id}/confirm-demo-payment/").data["payment_status"], "refunded")
+
+    def test_unpaid_completed_service_blocks_hiring_and_hides_professional(self):
+        order = self.make_order()
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
+        client = self.as_user(self.client_user)
+        payload = {
+            "household": self.household.id,
+            "selected_category": self.service.category.id,
+            "selected_service": self.service.id,
+            "professional": self.profile.id,
+            "description": "Otro servicio",
+        }
+
+        blocked = client.post("/api/v1/requests/", payload, format="json")
+        self.assertEqual(blocked.status_code, 403, blocked.data)
+        self.assertEqual(client.get("/api/v1/payments/hold/").data["orders"][0]["order_id"], order.id)
+
+        listed = [p["id"] for p in APIClient().get("/api/v1/professionals/").data["results"]]
+        self.assertNotIn(self.profile.id, listed)
+        admin_listed = [p["id"] for p in self.as_user(self.staff).get("/api/v1/professionals/").data["results"]]
+        self.assertIn(self.profile.id, admin_listed)
+
+        self.assertEqual(client.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/").status_code, 200)
+        listed = [p["id"] for p in APIClient().get("/api/v1/professionals/").data["results"]]
+        self.assertIn(self.profile.id, listed)
 
     def test_admin_summary_report_and_permissions(self):
         order = self.make_order()

@@ -76,6 +76,7 @@ export interface ProfessionalItem {
   headline?: string;
   company_name?: string;
   specialty_label?: string;
+  has_certificate?: boolean;
   avatar_url?: string;
   phone?: string;
   rating_avg: string | number;
@@ -5525,7 +5526,9 @@ export const AdminDashboard: React.FC = () => {
                                 <button
                                   type="button"
                                   className="ad-action-pill verify"
-                                  title="Ver certificado profesional cargado"
+                                  title={pro.has_certificate ? "Ver certificado profesional cargado" : "Este profesional no ha cargado certificado"}
+                                  disabled={pro.has_certificate === false}
+                                  style={pro.has_certificate === false ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                                   onClick={() => void handleViewProCertificate(pro)}
                                 >
                                   📄 Certificado
@@ -11032,6 +11035,14 @@ export const AdminDashboard: React.FC = () => {
                 </>
               ) : selectedDetailItem.detailType === "pro" ? (
                 <>
+                  <button
+                    type="button"
+                    className="ad-btn ad-btn-secondary"
+                    disabled={selectedDetailItem.has_certificate === false}
+                    onClick={() => void handleViewProCertificate(selectedDetailItem)}
+                  >
+                    📄 Ver certificado
+                  </button>
                   <button
                     type="button"
                     className="ad-btn ad-btn-primary"

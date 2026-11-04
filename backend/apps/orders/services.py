@@ -32,8 +32,8 @@ def transition(order: Order, new_status: str, user=None, note: str = "") -> Orde
         raise InvalidTransition(
             f"No se puede pasar de «{order.get_status_display()}» a «{new_status}»."
         )
-    if new_status == Order.Status.COMPLETED and order.payment_status != Order.PaymentStatus.PAID:
-        raise InvalidTransition("No se puede completar una orden con pago pendiente.")
+    # Se puede terminar con el pago pendiente: el cliente paga al finalizar y, mientras no lo
+    # haga, ambas cuentas quedan suspendidas (ver holds.py).
     order.status = new_status
     order.save(update_fields=["status", "updated_at"])
     OrderEvent.objects.create(order=order, status=new_status, note=note, created_by=user)

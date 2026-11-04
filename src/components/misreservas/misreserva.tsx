@@ -365,7 +365,7 @@ export const MisReserva: React.FC = () => {
                         </IonButton>
                       )}
 
-                      {item.order && item.order.payment_status === "pending" && (
+                      {item.order && item.order.payment_status === "pending" && item.statusCode === "completed" && (
                         <IonButton
                           routerLink={`/cliente/historialpago?order=${item.orderId}`}
                           fill="outline"

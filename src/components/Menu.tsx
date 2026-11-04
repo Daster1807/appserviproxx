@@ -422,16 +422,23 @@ const Menu: React.FC = () => {
           </IonItem>
         ) : null}
 
-        {!ischat && user?.role === 'client' && platform.features.professionals !== false && platform.features.services !== false ? (
-          <IonItem lines="none" detail={false} className="role-switch-item">
+        {!ischat && user?.role === 'client' && platform.features.professionals !== false ? (
+          <IonItem
+            lines="none"
+            detail={false}
+            button
+            className="role-switch-item"
+            disabled={roleChanging}
+            onClick={onStartBecomeProfessional}
+          >
             <IonIcon slot="start" icon={briefcaseOutline} />
-            <IonLabel>Ofrecer servicios</IonLabel>
+            <IonLabel>Cambiar a profesional</IonLabel>
             <IonButton
               slot="end"
               fill="clear"
               disabled={roleChanging}
-              aria-label="Ser profesional"
-              title="Ser profesional"
+              aria-label="Cambiar a perfil profesional"
+              title="Cambiar a perfil profesional"
               onClick={(event) => {
                 event.stopPropagation();
                 onStartBecomeProfessional();

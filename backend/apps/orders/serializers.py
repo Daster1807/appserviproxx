@@ -4,6 +4,7 @@ from apps.professionals.serializers import ProfessionalListSerializer
 from apps.service_requests.models import ServiceRequest
 from apps.service_requests.services import professional_offers_service
 
+from .holds import assert_client_can_hire, assert_professional_can_work
 from .models import Order, OrderEvent, Review, WorkEvidence
 from .services import refresh_rating
 
@@ -111,6 +112,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate_service_request(self, service_request):
         if service_request.client_id != self.context["request"].user.id:
             raise serializers.ValidationError("La solicitud no pertenece a este usuario.")
+        assert_client_can_hire(self.context["request"].user)
         if service_request.status not in {ServiceRequest.Status.OPEN, ServiceRequest.Status.MATCHED}:
             raise serializers.ValidationError("La solicitud ya no permite crear una orden.")
         return service_request
@@ -118,7 +120,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         service_request = attrs["service_request"]
         professional = attrs["professional"]
-
+        assert_professional_can_work(professional)
         if service_request.selected_service_id and not professional_offers_service(
             professional, service_request.selected_service_id
         ):
