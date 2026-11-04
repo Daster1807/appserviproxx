@@ -26,6 +26,7 @@ import { PqrReportModal } from '../components/pqr/PqrReportModal';
 import { PqrDetailModal } from '../components/pqr/PqrDetailModal';
 import { LiveSupportChatModal } from '../components/pqr/LiveSupportChatModal';
 import '../components/pqr/pqrStyles.css';
+import '../theme/tailwind.css';
 
 
 import type {

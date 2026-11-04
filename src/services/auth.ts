@@ -2,6 +2,7 @@ import { api, tokenStorage } from "./api";
 import type {
   AuthTokenResponse,
   LoginPayload,
+  ProfessionalCertificatePayload,
   RefreshTokenResponse,
   RegisterPayload,
   UpdateMePayload,
@@ -45,7 +46,13 @@ export const authService = {
   deleteCurrentUser: (reason: string) =>
     api.delete<void>("auth/me/delete/", { reason }),
 
-  becomeProfessional: () => api.post<User>("auth/become-professional/"),
+  becomeProfessional: (certificate?: ProfessionalCertificatePayload) => {
+    if (!certificate) return api.post<User>("auth/become-professional/");
+    const form = new FormData();
+    form.append("profession", certificate.profession);
+    form.append("certificate", certificate.file);
+    return api.post<User>("auth/become-professional/", form);
+  },
 
   becomeClient: () => api.post<User>("auth/become-client/"),
 

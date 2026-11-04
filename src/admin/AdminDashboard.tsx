@@ -2900,6 +2900,17 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Toggle de Verificación de Profesional (impacta en BD)
+  const handleViewProCertificate = async (pro: ProfessionalItem) => {
+    try {
+      const blob = await api.blob(`professionals/${pro.id}/certificate/`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      window.alert(`${pro.display_name} no ha cargado un certificado profesional.`);
+    }
+  };
+
   const handleToggleProVerification = async (pro: ProfessionalItem) => {
     const newStatus = !pro.is_verified;
     setAllProsList((prev) =>
@@ -5509,6 +5520,15 @@ export const AdminDashboard: React.FC = () => {
                                   onClick={() => handleViewProDetail(pro)}
                                 >
                                   👁
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ad-action-pill verify"
+                                  title="Ver certificado profesional cargado"
+                                  onClick={() => void handleViewProCertificate(pro)}
+                                >
+                                  📄 Certificado
                                 </button>
 
                                 <button

@@ -30,6 +30,11 @@ class UserSerializer(serializers.ModelSerializer):
     initials = serializers.CharField(read_only=True)
     client_profile = ClientProfileSerializer(read_only=True)
     is_currently_blocked = serializers.BooleanField(read_only=True)
+    has_professional_certificate = serializers.SerializerMethodField()
+
+    def get_has_professional_certificate(self, user) -> bool:
+        profile = getattr(user, "professional_profile", None)
+        return bool(profile and profile.certificate_file)
 
     class Meta:
         model = User
@@ -59,6 +64,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_staff",
             "is_superuser",
             "client_profile",
+            "has_professional_certificate",
             "created_at",
         ]
         read_only_fields = [

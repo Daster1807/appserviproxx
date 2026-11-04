@@ -37,6 +37,11 @@ class ProfessionalProfile(models.Model):
     response_time_minutes = models.PositiveIntegerField(_("tiempo de respuesta"), default=60)
 
     is_verified = models.BooleanField(_("verificado por Serviprox"), default=False)
+    certificate_profession = models.CharField(_("profesión certificada"), max_length=120, blank=True)
+    certificate_file = models.FileField(
+        _("certificado profesional"), upload_to="certificates/%Y/%m/", blank=True
+    )
+    certificate_uploaded_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(_("activo"), default=True)
     accepts_urgent = models.BooleanField(_("atiende urgencias"), default=False)
     points = models.PositiveIntegerField(_("puntos de incentivos"), default=1000)

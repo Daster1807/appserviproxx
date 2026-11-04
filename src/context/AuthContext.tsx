@@ -8,7 +8,13 @@ import React, {
 } from "react";
 import { tokenStorage, ApiError } from "../services/api";
 import { authService } from "../services/auth";
-import type { LoginPayload, RegisterPayload, UpdateMePayload, User } from "../types/serviprox";
+import type {
+  LoginPayload,
+  ProfessionalCertificatePayload,
+  RegisterPayload,
+  UpdateMePayload,
+  User,
+} from "../types/serviprox";
 
 const DEMO_SESSION_KEY = "serviprox_demo_user";
 const CACHED_USER_KEY = "serviprox_cached_user";
@@ -128,7 +134,7 @@ type AuthContextValue = {
   logout: () => void;
   refreshSession: () => Promise<User | null>;
   updateMe: (payload: UpdateMePayload) => Promise<User>;
-  becomeProfessional: () => Promise<User>;
+  becomeProfessional: (certificate?: ProfessionalCertificatePayload) => Promise<User>;
   becomeClient: () => Promise<User>;
   becomeStaff: () => Promise<User>;
   completeOnboarding: () => Promise<User>;
@@ -251,8 +257,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return updatedUser;
   }, [saveUser]);
 
-  const becomeProfessional = useCallback(async () => {
-    const updatedUser = await authService.becomeProfessional();
+  const becomeProfessional = useCallback(async (certificate?: ProfessionalCertificatePayload) => {
+    const updatedUser = await authService.becomeProfessional(certificate);
     saveUser(updatedUser);
     return updatedUser;
   }, [saveUser]);

@@ -1,13 +1,15 @@
 import secrets
 import re
 import logging
+import mimetypes
 from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -142,6 +144,34 @@ class DeleteAccountView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024
+CERTIFICATE_SIGNATURES = {
+    ".pdf": (b"%PDF",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+}
+
+
+def validate_certificate_upload(upload, profession: str) -> None:
+    """Exige profesión y un certificado PDF/JPG/PNG de hasta 5 MB cuyo contenido coincida con su extensión."""
+    errors = {}
+    if not 3 <= len(profession) <= 120:
+        errors["profession"] = "Indica la profesión u oficio con el que trabajarás (3 a 120 caracteres)."
+    if upload is None:
+        errors["certificate"] = "Adjunta el certificado de tu profesión."
+    else:
+        extension = "." + upload.name.rsplit(".", 1)[-1].lower() if "." in upload.name else ""
+        header = upload.read(8)
+        upload.seek(0)
+        if extension not in CERTIFICATE_SIGNATURES or not header.startswith(CERTIFICATE_SIGNATURES[extension]):
+            errors["certificate"] = "El certificado debe ser un archivo PDF, JPG o PNG válido."
+        elif upload.size > MAX_CERTIFICATE_BYTES:
+            errors["certificate"] = "El certificado no puede superar 5 MB."
+    if errors:
+        raise ValidationError(errors)
+
+
 class BecomeProfessionalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -150,6 +180,16 @@ class BecomeProfessionalView(APIView):
         require_feature("professionals", "El registro de profesionales está deshabilitado.")
         if user.role == UserRole.STAFF:
             raise ValidationError({"detail": "El equipo Serviprox no puede cambiar a este rol."})
+
+        # Quien ya cargó un certificado en el pasado no tiene que volver a enviarlo.
+        from apps.professionals.models import ProfessionalProfile as ExistingProfile
+
+        existing = ExistingProfile.objects.filter(user=user).first()
+        upload = request.FILES.get("certificate")
+        profession = str(request.data.get("profession", "")).strip()
+        needs_certificate = upload is not None or not (existing and existing.certificate_file)
+        if needs_certificate:
+            validate_certificate_upload(upload, profession)
 
         user.role = UserRole.PROFESSIONAL
         user.onboarding_completed = False
@@ -192,7 +232,37 @@ class BecomeProfessionalView(APIView):
                     end_time=time(18, 0),
                 )
 
+        if needs_certificate:
+            prof.certificate_file = upload
+            prof.certificate_profession = profession
+            prof.certificate_uploaded_at = timezone.now()
+            prof.specialty_label = prof.specialty_label or profession
+            prof.is_verified = False
+            prof.save()
+
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class ProfessionalCertificateView(APIView):
+    """Entrega el certificado solo a su dueño o al equipo Serviprox."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from apps.professionals.models import ProfessionalProfile
+
+        profile = ProfessionalProfile.objects.filter(pk=pk).first()
+        user = request.user
+        is_staff = user.is_staff or user.role == UserRole.STAFF
+        if profile is None or not (is_staff or profile.user_id == user.id):
+            raise NotFound("Certificado no encontrado.")
+        if not profile.certificate_file:
+            raise NotFound("Este profesional no ha cargado un certificado.")
+        content_type = mimetypes.guess_type(profile.certificate_file.name)[0] or "application/octet-stream"
+        response = FileResponse(profile.certificate_file.open("rb"), content_type=content_type)
+        response["Cache-Control"] = "private, no-store"
+        response["Content-Disposition"] = 'inline; filename="certificado"'
+        return response
 
 
 class BecomeClientView(APIView):

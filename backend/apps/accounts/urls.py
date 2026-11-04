@@ -21,6 +21,7 @@ from .views import (
     ConfirmPasswordResetView,
     DeleteAccountView,
     MeView,
+    ProfessionalCertificateView,
     RegisterView,
     RequestPasswordResetView,
 )
@@ -35,6 +36,11 @@ urlpatterns = [
         "auth/become-professional/",
         BecomeProfessionalView.as_view(),
         name="auth-become-professional",
+    ),
+    path(
+        "professionals/<int:pk>/certificate/",
+        ProfessionalCertificateView.as_view(),
+        name="professional-certificate",
     ),
     path(
         "auth/become-client/",
