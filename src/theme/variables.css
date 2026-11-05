@@ -147,15 +147,15 @@ ion-app.theme-professional,
    Cliente #F5C3BA | Profesional #D3DCF2 | Tarjetas #FFFFFF
    ======================================================== */
 
-/* Contenidos y páginas Cliente (#F5C3BA) */
+/* El flujo de servicios puede aportar un fondo neutro sin cambiar otras áreas. */
 .theme-client ion-content:not(ion-menu ion-content):not(.menu-content),
 [data-theme="client"] ion-content:not(ion-menu ion-content):not(.menu-content),
 .theme-client ion-modal ion-content,
 [data-theme="client"] ion-modal ion-content,
 .theme-client ion-page,
 [data-theme="client"] ion-page {
-	--background: #F5C3BA !important;
-	background: #F5C3BA !important;
+	--background: var(--sp-workflow-background, #F5C3BA) !important;
+	background: var(--sp-workflow-background, #F5C3BA) !important;
 }
 
 /* Contenidos y páginas Profesional (#D3DCF2) */
@@ -165,8 +165,8 @@ ion-app.theme-professional,
 [data-theme="professional"] ion-modal ion-content,
 .theme-professional ion-page,
 [data-theme="professional"] ion-page {
-	--background: #D3DCF2 !important;
-	background: #D3DCF2 !important;
+	--background: var(--sp-workflow-background, #D3DCF2) !important;
+	background: var(--sp-workflow-background, #D3DCF2) !important;
 }
 
 /* Menú lateral (El host ion-menu debe ser transparente para ver la página a la derecha; el contenedor es el que lleva color) */
@@ -235,24 +235,24 @@ ion-menu,
 [data-theme="professional"] .sp-detail-card {
 	--background: #ffffff !important;
 	background: #ffffff !important;
-	border: 1px solid rgba(0, 0, 0, 0.08) !important;
-	color: #1e293b !important;
-	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06) !important;
+	border: 1px solid var(--sp-workflow-border, rgba(0, 0, 0, 0.08)) !important;
+	color: var(--sp-workflow-ink, #1e293b) !important;
+	box-shadow: var(--sp-workflow-shadow, 0 10px 25px rgba(0, 0, 0, 0.06)) !important;
 }
 
 /* Barras de navegación superiores (Toolbars) */
 .theme-client ion-toolbar,
 [data-theme="client"] ion-toolbar {
-	--background: #F5C3BA !important;
-	--color: #1E0709 !important;
-	border-bottom: 1px solid rgba(220, 38, 38, 0.12);
+	--background: var(--sp-workflow-toolbar, #F5C3BA) !important;
+	--color: var(--sp-workflow-ink, #1E0709) !important;
+	border-bottom: 1px solid var(--sp-workflow-border, rgba(220, 38, 38, 0.12));
 }
 
 .theme-professional ion-toolbar,
 [data-theme="professional"] ion-toolbar {
-	--background: #D3DCF2 !important;
-	--color: #051329 !important;
-	border-bottom: 1px solid rgba(11, 47, 107, 0.12);
+	--background: var(--sp-workflow-toolbar, #D3DCF2) !important;
+	--color: var(--sp-workflow-ink, #051329) !important;
+	border-bottom: 1px solid var(--sp-workflow-border, rgba(11, 47, 107, 0.12));
 }
 
 /* Items y listas */
@@ -341,10 +341,10 @@ ion-menu,
 [data-theme="client"] ion-input,
 [data-theme="client"] ion-textarea,
 [data-theme="client"] ion-select {
-	--background: #FFF5F6 !important;
-	background: #FFF5F6 !important;
-	border-color: rgba(220, 38, 38, 0.18) !important;
-	--color: #1E0709 !important;
+	--background: var(--sp-workflow-field, #FFF5F6) !important;
+	background: var(--sp-workflow-field, #FFF5F6) !important;
+	border-color: var(--sp-workflow-border, rgba(220, 38, 38, 0.18)) !important;
+	--color: var(--sp-workflow-ink, #1E0709) !important;
 }
 
 .theme-professional ion-input,
@@ -353,10 +353,10 @@ ion-menu,
 [data-theme="professional"] ion-input,
 [data-theme="professional"] ion-textarea,
 [data-theme="professional"] ion-select {
-	--background: #F8FBFF !important;
-	background: #F8FBFF !important;
-	border-color: rgba(11, 47, 107, 0.18) !important;
-	--color: #051329 !important;
+	--background: var(--sp-workflow-field, #F8FBFF) !important;
+	background: var(--sp-workflow-field, #F8FBFF) !important;
+	border-color: var(--sp-workflow-border, rgba(11, 47, 107, 0.18)) !important;
+	--color: var(--sp-workflow-ink, #051329) !important;
 }
 
 /* Modales y Diálogos */
@@ -387,12 +387,12 @@ ion-menu,
 /* Sidebars (por ejemplo en el mapa) */
 .theme-client .sp-map-sidebar,
 [data-theme="client"] .sp-map-sidebar {
-	background: #FFF5F6 !important;
-	border: 1px solid rgba(220, 38, 38, 0.14) !important;
+	background: var(--sp-workflow-toolbar, #FFF5F6) !important;
+	border: 1px solid var(--sp-workflow-border, rgba(220, 38, 38, 0.14)) !important;
 }
 
 .theme-professional .sp-map-sidebar,
 [data-theme="professional"] .sp-map-sidebar {
-	background: #F8FBFF !important;
-	border: 1px solid rgba(11, 47, 107, 0.14) !important;
+	background: var(--sp-workflow-toolbar, #F8FBFF) !important;
+	border: 1px solid var(--sp-workflow-border, rgba(11, 47, 107, 0.14)) !important;
 }

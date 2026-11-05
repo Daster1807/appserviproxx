@@ -35,6 +35,7 @@ import '@ionic/react/css/palettes/dark.system.css';
 
 /* Theme variables */
 import './theme/variables.css';
+import './theme/service-flow.css';
 
 // Componentes secundarios cargados bajo demanda (Code Splitting) para inicio ultrarrápido
 const Page = lazy(() => import('./pages/Page'));
@@ -52,6 +53,7 @@ const ProfessionalOnboarding = lazy(() => import('./pages/ProfessionalOnboarding
 const ProfessionalProfilePage = lazy(() => import('./pages/ProfessionalProfilePage'));
 const ProfessionalRequestDetailPage = lazy(() => import('./pages/ProfessionalRequestDetailPage'));
 const ProfessionalRequestsPage = lazy(() => import('./pages/ProfessionalRequestsPage'));
+const ProfessionalJobsPage = lazy(() => import('./pages/ProfessionalJobsPage'));
 const RolePlaceholderPage = lazy(() => import('./pages/RolePlaceholderPage'));
 const StaffHome = lazy(() => import('./pages/StaffHome'));
 const WorkTrackingPage = lazy(() => import('./pages/WorkTrackingPage'));
@@ -99,6 +101,7 @@ const LazyProfessionalOnboarding = withLazy(ProfessionalOnboarding);
 const LazyProfessionalProfilePage = withLazy(ProfessionalProfilePage);
 const LazyProfessionalRequestDetailPage = withLazy(ProfessionalRequestDetailPage);
 const LazyProfessionalRequestsPage = withLazy(ProfessionalRequestsPage);
+const LazyProfessionalJobsPage = withLazy(ProfessionalJobsPage);
 const LazyStaffHome = withLazy(StaffHome);
 const LazyWorkTrackingPage = withLazy(WorkTrackingPage);
 const LazyPqrPage = withLazy(PqrPage);
@@ -307,13 +310,14 @@ const App: React.FC = () => {
                   <LazyWorkTrackingPage />
                 </RequireAuth>
               </Route>
+              <Route path="/seguimiento/solicitud/:requestId" exact={true}>
+                <RequireAuth onboarding="any">
+                  <LazyWorkTrackingPage />
+                </RequireAuth>
+              </Route>
               <Route path="/profesional/trabajos" exact={true}>
                 <RequireAuth role="professional">
-                  <RolePlaceholderPage
-                    kicker="PROFESIONAL"
-                    title="Mis trabajos"
-                    description="Todavía no hay órdenes conectadas para esta experiencia profesional."
-                  />
+                  <LazyProfessionalJobsPage />
                 </RequireAuth>
               </Route>
               <Route path="/profesional/disponibilidad" exact={true}>
