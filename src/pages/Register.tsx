@@ -31,6 +31,9 @@ import styles from "./Login.module.css";
 
 const emailOk = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
 
+const MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
+const CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+
 const slugPart = (value: string) =>
   value
     .normalize("NFD")
@@ -55,6 +58,8 @@ const getApiFieldMessage = (payload: unknown) => {
     username: "Usuario",
     password: "Contraseña",
     role: "Tipo de cuenta",
+    profession: "Profesión",
+    certificate: "Certificado",
   };
   return `${labels[field] || field}: ${message}`;
 };
@@ -107,7 +112,24 @@ const Register: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
+  const [profession, setProfession] = useState("");
+  const [certificate, setCertificate] = useState<File | null>(null);
+  const [certificateError, setCertificateError] = useState("");
 
+  const pickCertificate = (file: File | null) => {
+    setCertificateError("");
+    if (file && !CERTIFICATE_TYPES.includes(file.type)) {
+      setCertificateError("El certificado debe ser un archivo PDF, JPG o PNG.");
+      setCertificate(null);
+      return;
+    }
+    if (file && file.size > MAX_CERTIFICATE_BYTES) {
+      setCertificateError("El certificado no puede superar 5 MB.");
+      setCertificate(null);
+      return;
+    }
+    setCertificate(file);
+  };
   useEffect(() => {
     if (!sessionLoading && isAuthenticated) {
       history.replace(getEntryRoute(user));
@@ -131,7 +153,8 @@ const Register: React.FC = () => {
     emailOk(email) &&
     password.length >= 8 &&
     passwordsMatch;
-  const canSubmit = canContinue && !isSubmitting;
+  const certificateOk = role !== "professional" || (profession.trim().length >= 3 && certificate !== null);
+  const canSubmit = canContinue && certificateOk && !isSubmitting;
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -158,6 +181,9 @@ const Register: React.FC = () => {
         address: address.trim(),
         role,
         password,
+        ...(role === "professional" && certificate
+          ? { profession: profession.trim(), certificate }
+          : {}),
       };
       let currentUser;
       try {
@@ -391,6 +417,40 @@ const Register: React.FC = () => {
                   </div>
                 </label>
               </div>
+
+              {role === "professional" && (
+                <>
+                  <label className={styles.field}>
+                    <span>Profesión u oficio</span>
+                    <div className={styles.inputShell}>
+                      <IonIcon icon={briefcaseOutline} aria-hidden="true" />
+                      <IonInput
+                        value={profession}
+                        maxlength={120}
+                        placeholder="Ej: Electricista, Plomero, Técnico en aires"
+                        onIonInput={(event) => setProfession(String(event.detail.value ?? ""))}
+                        required
+                      />
+                    </div>
+                  </label>
+
+                  <label className={styles.field}>
+                    <span>Certificado profesional (PDF, JPG o PNG, máx. 5 MB)</span>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      onChange={(event) => pickCertificate(event.target.files?.[0] ?? null)}
+                      required
+                    />
+                    {certificate && <small>Archivo seleccionado: {certificate.name}</small>}
+                  </label>
+                  {certificateError && (
+                    <p className={styles.error} role="alert">
+                      {certificateError}
+                    </p>
+                  )}
+                </>
+              )}
               </>)}
 
               {error && (

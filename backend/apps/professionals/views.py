@@ -10,6 +10,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from apps.accounts.models import UserRole
+from apps.orders.models import Order
 
 from .geo import annotate_distance, within_radius
 from .models import ProfessionalProfile, ProfessionalService
@@ -135,6 +136,21 @@ class ProfessionalViewSet(viewsets.ReadOnlyModelViewSet):
 
         if params.get("accepts_urgent") in {"1", "true", "True"}:
             queryset = queryset.filter(accepts_urgent=True)
+
+        # Un profesional con un servicio terminado sin pagar queda fuera de las búsquedas
+        # públicas; el equipo Serviprox sigue viéndolo en el panel administrativo.
+        user = self.request.user
+        is_staff = user.is_authenticated and (user.is_staff or user.role == UserRole.STAFF)
+        if self.action == "list" and not is_staff:
+            queryset = queryset.exclude(
+                Exists(
+                    Order.objects.filter(
+                        professional=OuterRef("pk"),
+                        status=Order.Status.COMPLETED,
+                        payment_status=Order.PaymentStatus.PENDING,
+                    )
+                )
+            )
 
         lat, lng = params.get("lat"), params.get("lng")
         if lat and lng:

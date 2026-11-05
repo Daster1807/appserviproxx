@@ -89,6 +89,10 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
     availability_label = serializers.SerializerMethodField()
     phone = serializers.CharField(source="user.phone", read_only=True)
     company_name = serializers.CharField(source="headline", read_only=True)
+    has_certificate = serializers.SerializerMethodField()
+
+    def get_has_certificate(self, obj) -> bool:
+        return bool(obj.certificate_file)
 
     class Meta:
         model = ProfessionalProfile
@@ -101,6 +105,7 @@ class ProfessionalListSerializer(serializers.ModelSerializer):
             "headline",
             "company_name",
             "specialty_label",
+            "has_certificate",
             "avatar_url",
             "phone",
             "rating_avg",

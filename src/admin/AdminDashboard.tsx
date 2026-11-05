@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { adminService } from "../services/adminService";
+import { api } from "../services/api";
 import { usePlatformSettings } from "../services/platformSettings";
 import AdminSettings from "./AdminSettings";
 import AdminReportsStats from "./AdminReportsStats";
+import AdminPayments from "./AdminPayments";
 import { AdminCatalogManager } from "./AdminCatalogManager";
 import "./AdminDashboard.css";
 
@@ -20,6 +22,7 @@ type AdminMenuId =
   | "catalogo_sugerencias"
   | "publicaciones_productos"
   | "contrataciones"
+  | "pagos"
   | "pqr"
   | "beneficios"
   | "fallas"
@@ -73,6 +76,7 @@ export interface ProfessionalItem {
   headline?: string;
   company_name?: string;
   specialty_label?: string;
+  has_certificate?: boolean;
   avatar_url?: string;
   phone?: string;
   rating_avg: string | number;
@@ -378,7 +382,7 @@ const INITIAL_DB_PROS: ProfessionalItem[] = [
   {
     id: 7,
     display_name: "Rodrigo Salamanca",
-    headline: "Plomero Certificado SENA",
+    headline: "Plomero Certificado ",
     specialty_label: "Plomería y Redes Hidráulicas",
     avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&auto=format&fit=crop&q=80",
     phone: "+57 318 776 5544",
@@ -651,6 +655,124 @@ const INITIAL_BENEFIT_CATALOG: BenefitCatalogItem[] = [
     level_required: "Plata",
   },
 ];
+
+// Categorías aceptadas por la tienda en la base de datos
+const STORE_CATEGORIES = [
+  "Herramientas",
+  "Equipos",
+  "Seguridad y EPP",
+  "Materiales",
+  "Repuestos",
+  "Tecnología",
+  "Muebles",
+  "Ropa",
+  "Electrodomésticos",
+  "Hogar y decoración",
+  "Otros",
+];
+
+// Mensajes automáticos de respuesta: varían por tipo, estado y por cada caso (detalles y redacción propia)
+type PqrReplyStatus = "En proceso" | "Resuelta" | "En revisión" | "Cerrada";
+
+const PQR_AUTO_REPLIES: Record<PqrItem["type"], Record<PqrReplyStatus, string[]>> = {
+  queja: {
+    "En proceso": [
+      "lamentamos lo ocurrido en {relacionado}. Ya contactamos a {contratista} para conocer su versión y estamos investigando lo sucedido durante el servicio.",
+      "su queja sobre {relacionado} fue asignada a un analista de calidad, que está revisando el historial del servicio y la conducta de {contratista}.",
+      "hemos iniciado la investigación de lo reportado en {relacionado}. Estamos escuchando a ambas partes y le contaremos el resultado muy pronto.",
+    ],
+    "En revisión": [
+      "estamos analizando el historial de {relacionado} y la conversación con {contratista}. Si tiene fotografías o capturas del chat, compártalas para completar la revisión.",
+      "para avanzar con su queja sobre {relacionado} necesitamos más evidencia: indíquenos fecha y hora exactas de lo ocurrido y adjunte los soportes que tenga.",
+      "su caso pasó a revisión por el comité de calidad. Podríamos solicitarle una breve llamada para ampliar los detalles de {relacionado}.",
+    ],
+    "Resuelta": [
+      "tras verificar los hechos de {relacionado}, aplicamos una medida a {contratista} y reforzamos el seguimiento a su desempeño. Le ofrecemos disculpas por la experiencia.",
+      "confirmamos lo sucedido en {relacionado}. {contratista} recibió una llamada de atención formal y una capacitación obligatoria de atención al cliente.",
+      "su queja fue atendida: ajustamos la calificación del servicio {relacionado} y dejamos constancia en el perfil de {contratista}. Gracias por ayudarnos a mejorar.",
+    ],
+    "Cerrada": [
+      "damos por finalizada su queja sobre {relacionado} y la dejamos registrada en el historial de calidad. Gracias por ayudarnos a mejorar el servicio.",
+      "cerramos el caso tras entregarle la respuesta definitiva sobre {relacionado}. Si vuelve a presentarse un inconveniente similar, radique una nueva solicitud.",
+      "su queja quedó archivada con su respectiva evidencia. Agradecemos su paciencia durante todo el proceso de {relacionado}.",
+    ],
+  },
+  reclamo: {
+    "En proceso": [
+      "estamos validando el cobro o la garantía de {relacionado} con las áreas de pagos y soporte. Le confirmaremos el resultado en máximo 3 días hábiles.",
+      "su reclamo sobre {relacionado} fue radicado ante el área financiera y está en validación. Le notificaremos apenas tengamos una decisión.",
+      "hemos solicitado a {contratista} su versión sobre {relacionado} mientras revisamos las transacciones asociadas a su reclamo.",
+    ],
+    "En revisión": [
+      "necesitamos soportes para validar su reclamo sobre {relacionado}: comprobante de pago, factura o evidencia del inconveniente. Puede adjuntarlos respondiendo este mensaje.",
+      "para continuar con {relacionado} requerimos una captura de su extracto bancario donde se vea el movimiento reclamado.",
+      "su reclamo está en revisión por el equipo de garantías. Podemos pedirle fotos del trabajo realizado en {relacionado} para dictaminar.",
+    ],
+    "Resuelta": [
+      "su reclamo sobre {relacionado} fue aprobado. Procederemos con el reembolso, que verá reflejado en 5 a 10 días hábiles según su medio de pago.",
+      "se aprobó la garantía de {relacionado}: {contratista} deberá realizar la corrección sin costo adicional dentro de los próximos 5 días.",
+      "resolvimos su reclamo con un crédito en su billetera Serviprox por el valor de {relacionado}, disponible desde hoy para su próxima contratación.",
+    ],
+    "Cerrada": [
+      "cerramos su reclamo sobre {relacionado} tras entregarle la compensación definida. Conservamos el registro por si necesita consultarlo.",
+      "el reclamo quedó finalizado y archivado. Gracias por permitirnos corregir lo ocurrido en {relacionado}.",
+      "damos por concluido el trámite de {relacionado}. Si el reembolso no se refleja en el plazo indicado, escríbanos y lo reabriremos.",
+    ],
+  },
+  peticion: {
+    "En proceso": [
+      "recibimos su petición y ya está siendo gestionada por el área responsable de {relacionado}. Le avisaremos cuando el trámite quede completado.",
+      "su solicitud fue asignada a un agente de soporte y está en trámite. El tiempo estimado de atención es de 2 días hábiles.",
+      "estamos tramitando su petición sobre {relacionado}; no necesita realizar ninguna acción por ahora.",
+    ],
+    "En revisión": [
+      "para atender su petición necesitamos confirmar algunos datos: envíenos su documento de identidad y el dato que desea modificar en {relacionado}.",
+      "su solicitud requiere una verificación de identidad. Por favor responda con una foto legible de su documento por ambas caras.",
+      "estamos revisando si su petición sobre {relacionado} cumple las políticas vigentes y le pediremos información adicional si es necesario.",
+    ],
+    "Resuelta": [
+      "su petición fue atendida y la información ya se actualizó en su cuenta. Puede verificar el cambio ingresando a su perfil.",
+      "completamos el trámite de {relacionado}. Enviamos la confirmación a su correo registrado.",
+      "atendimos su solicitud satisfactoriamente; los cambios sobre {relacionado} ya están activos en la aplicación.",
+    ],
+    "Cerrada": [
+      "damos por cerrada su petición una vez entregada la respuesta. Si requiere otro trámite, radique una nueva solicitud desde la aplicación.",
+      "su solicitud sobre {relacionado} quedó finalizada y archivada. Gracias por comunicarse con Serviprox.",
+      "cerramos el caso porque el trámite fue completado. Estamos disponibles para cualquier otra necesidad.",
+    ],
+  },
+  reporte: {
+    "En proceso": [
+      "gracias por reportarlo. Moderación ya está revisando {relacionado} y tomará medidas preventivas mientras avanza la verificación.",
+      "su reporte sobre {relacionado} fue escalado al equipo de seguridad, que verificará el contenido señalado en las próximas 24 horas.",
+      "estamos investigando lo reportado en {relacionado}. Mientras tanto, limitamos la visibilidad del contenido como medida de precaución.",
+    ],
+    "En revisión": [
+      "estamos evaluando {relacionado} frente a los términos y condiciones de la plataforma. Si tiene capturas o enlaces adicionales, envíelos para fortalecer la revisión.",
+      "su reporte está en revisión manual. Podríamos pedirle que describa en qué momento detectó la irregularidad en {relacionado}.",
+      "el equipo de moderación está contrastando su reporte con el historial de {relacionado}; le informaremos si necesitamos más evidencia.",
+    ],
+    "Resuelta": [
+      "confirmamos la infracción en {relacionado} y aplicamos la sanción correspondiente. Gracias por ayudar a mantener segura la comunidad.",
+      "el contenido señalado en {relacionado} fue retirado y la cuenta responsable recibió una advertencia formal.",
+      "tras la verificación, {relacionado} fue corregido por el titular y aprobado nuevamente por moderación.",
+    ],
+    "Cerrada": [
+      "su reporte sobre {relacionado} quedó cerrado y archivado. Por privacidad no compartimos más detalles, pero la medida quedó registrada.",
+      "damos por finalizada la gestión de su reporte. Gracias por su colaboración para mantener la plataforma confiable.",
+      "el caso fue cerrado luego de aplicar las acciones de moderación sobre {relacionado}. Si detecta algo similar, repórtelo nuevamente.",
+    ],
+  },
+};
+
+const buildPqrAutoReply = (pqr: PqrItem, status: PqrReplyStatus): string => {
+  const variants = PQR_AUTO_REPLIES[pqr.type][status];
+  const seed = Number(String(pqr.raw_id ?? pqr.id).replace(/\D/g, "")) || 0;
+  const body = variants[seed % variants.length]
+    .replace(/\{relacionado\}/g, pqr.relatedTo)
+    .replace(/\{contratista\}/g, pqr.contractor?.name ?? "el profesional");
+  return `Estimado(a) ${pqr.client.name}, respecto a su ${pqr.typeLabel.toLowerCase()} ${pqr.id} (${pqr.title}): ${body}`;
+};
 
 // Datos del módulo PQR y Reportes sincronizados con la captura oficial
 const INITIAL_PQR_ITEMS: PqrItem[] = [
@@ -944,6 +1066,82 @@ const INITIAL_PQR_ITEMS: PqrItem[] = [
   },
 ];
 
+const PQR_EXTRA_TYPES = {
+  queja: { typeLabel: "Queja", typeIcon: "⚠️", typeBg: "#fee2e2", typeColor: "#dc2626" },
+  reclamo: { typeLabel: "Reclamo", typeIcon: "📄", typeBg: "#f3e8ff", typeColor: "#9333ea" },
+  peticion: { typeLabel: "Petición", typeIcon: "📄", typeBg: "#fef3c7", typeColor: "#d97706" },
+  reporte: { typeLabel: "Reporte", typeIcon: "🚩", typeBg: "#dcfce7", typeColor: "#16a34a" },
+} as const;
+
+const PQR_EXTRA_SEEDS: Array<{
+  type: keyof typeof PQR_EXTRA_TYPES;
+  title: string;
+  shortDesc: string;
+  description: string;
+  client: string;
+  contractor: string | null;
+  relatedTo: string;
+  priority: PqrItem["priority"];
+  status: PqrItem["status"];
+  city: string;
+}> = [
+  { type: "queja", title: "Servicio incompleto", shortDesc: "El trabajo quedó a medias...", description: "El profesional dejó el trabajo de plomería sin terminar y no volvió a responder los mensajes.", client: "María Fernanda Ruiz", contractor: "Jorge Ramírez", relatedTo: "Contratación #551", priority: "Alta", status: "Abierta", city: "Medellín, Colombia" },
+  { type: "reclamo", title: "Cobro duplicado", shortDesc: "Se cobró dos veces el...", description: "Al pagar el servicio con tarjeta el cargo apareció duplicado en mi extracto bancario.", client: "Pedro Castillo", contractor: null, relatedTo: "Pago #3321", priority: "Alta", status: "En proceso", city: "Cali, Colombia" },
+  { type: "peticion", title: "Cambio de correo registrado", shortDesc: "Solicito actualizar mi...", description: "Solicito actualizar el correo electrónico asociado a mi cuenta porque perdí acceso al anterior.", client: "Sofía Herrera", contractor: null, relatedTo: "Cuenta de usuario", priority: "Baja", status: "Resuelta", city: "Bogotá, Colombia" },
+  { type: "reporte", title: "Publicación con fotos falsas", shortDesc: "El producto usa imágenes...", description: "Reporto una publicación de la tienda que usa fotografías tomadas de otra persona y datos de contacto inconsistentes.", client: "Daniel Torres", contractor: "Luis Mendoza", relatedTo: "Publicación #2210", priority: "Media", status: "En revisión", city: "Barranquilla, Colombia" },
+  { type: "queja", title: "Trato irrespetuoso", shortDesc: "El técnico usó un lenguaje...", description: "Durante la visita el técnico respondió de forma grosera cuando pregunté por el presupuesto.", client: "Camila Ortiz", contractor: "Felipe Vargas", relatedTo: "Contratación #547", priority: "Media", status: "En proceso", city: "Bogotá, Colombia" },
+  { type: "reclamo", title: "Garantía no respetada", shortDesc: "La reparación falló a los...", description: "La reparación del calentador falló a los tres días y el profesional se niega a aplicar la garantía.", client: "Andrés Molina", contractor: "Héctor Silva", relatedTo: "Contratación #539", priority: "Alta", status: "En revisión", city: "Cartagena, Colombia" },
+  { type: "peticion", title: "Solicitud de factura", shortDesc: "Necesito la factura del...", description: "Requiero la factura electrónica del servicio de pintura realizado el mes pasado.", client: "Valentina Rojas", contractor: null, relatedTo: "Contratación #533", priority: "Baja", status: "Resuelta", city: "Pereira, Colombia" },
+  { type: "reporte", title: "Spam en el chat", shortDesc: "Recibo mensajes publicitarios...", description: "Un usuario envía mensajes publicitarios repetidos por el chat de la plataforma.", client: "Julián Peña", contractor: null, relatedTo: "Chat #884", priority: "Media", status: "Abierta", city: "Bucaramanga, Colombia" },
+  { type: "queja", title: "Demora en la respuesta", shortDesc: "Llevo tres días esperando...", description: "Envié una solicitud de servicio y ningún profesional ha respondido en más de tres días.", client: "Natalia Cardona", contractor: null, relatedTo: "Solicitud #702", priority: "Baja", status: "Cerrada", city: "Manizales, Colombia" },
+  { type: "reclamo", title: "Materiales no entregados", shortDesc: "Pagué materiales que no...", description: "Pagué los materiales por adelantado y el profesional nunca los entregó en la obra.", client: "Ricardo Salazar", contractor: "Mauricio Prieto", relatedTo: "Tienda #231", priority: "Alta", status: "Abierta", city: "Medellín, Colombia" },
+  { type: "peticion", title: "Eliminar cuenta", shortDesc: "Solicito el cierre de mi...", description: "Solicito la eliminación definitiva de mi cuenta y de mis datos personales.", client: "Paola Jiménez", contractor: null, relatedTo: "Cuenta de usuario", priority: "Media", status: "En proceso", city: "Cali, Colombia" },
+  { type: "reporte", title: "Reseña ofensiva", shortDesc: "Una reseña contiene insultos...", description: "Una reseña publicada en mi perfil contiene insultos y acusaciones falsas.", client: "Sebastián Acosta", contractor: "Iván Duarte", relatedTo: "Reseña #915", priority: "Media", status: "Resuelta", city: "Bogotá, Colombia" },
+  { type: "queja", title: "Cancelación sin aviso", shortDesc: "El profesional canceló...", description: "El profesional canceló la cita minutos antes de la hora acordada sin dar explicación.", client: "Lucía Barrera", contractor: "Óscar Naranjo", relatedTo: "Contratación #520", priority: "Media", status: "Abierta", city: "Barranquilla, Colombia" },
+  { type: "reclamo", title: "Reembolso pendiente", shortDesc: "Aún no recibo el reembolso...", description: "El servicio fue cancelado hace dos semanas y el reembolso aprobado no se ha reflejado.", client: "Mateo Quintero", contractor: null, relatedTo: "Tienda #240", priority: "Alta", status: "En revisión", city: "Pereira, Colombia" },
+];
+
+PQR_EXTRA_SEEDS.forEach((seed, index) => {
+  const rawId = 1020 - index;
+  const day = String(Math.max(1, 4 - Math.floor(index / 3))).padStart(2, "0");
+  const date = `${day}/10/2026 ${String(8 + (index % 9)).padStart(2, "0")}:15`;
+  INITIAL_PQR_ITEMS.push({
+    id: `#${rawId}`,
+    raw_id: rawId,
+    type: seed.type,
+    ...PQR_EXTRA_TYPES[seed.type],
+    title: seed.title,
+    shortDesc: seed.shortDesc,
+    description: seed.description,
+    client: {
+      name: seed.client,
+      document_id: `CC 10${String(20000000 + rawId * 137)}`,
+      avatar: `https://i.pravatar.cc/100?img=${(index % 60) + 1}`,
+      rating: 4.5,
+      reviews_count: 10 + index,
+      email: `${seed.client.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@serviprox.co`,
+    },
+    contractor: seed.contractor
+      ? {
+          name: seed.contractor,
+          document_id: `CC 10${String(30000000 + rawId * 211)}`,
+          avatar: `https://i.pravatar.cc/100?img=${((index + 30) % 60) + 1}`,
+          rating: 4.4,
+          reviews_count: 40 + index,
+          specialty: "Servicios generales",
+        }
+      : null,
+    relatedTo: seed.relatedTo,
+    date,
+    updatedDate: date,
+    priority: seed.priority,
+    status: seed.status,
+    city: seed.city,
+    attachments: [],
+    timeline: [{ date, text: `${PQR_EXTRA_TYPES[seed.type].typeLabel} radicada por el usuario` }],
+  });
+});
+
 // Datos oficiales del módulo de Fallas Técnicas sincronizados con la captura
 const INITIAL_FAILURES_DATA: TechnicalFailureItem[] = [
   {
@@ -1236,11 +1434,10 @@ export const AdminDashboard: React.FC = () => {
     const blocked =
       (activeMenu === "beneficios" && !benefitsEnabled) ||
       (["publicaciones_servicios", "catalogo_categorias", "catalogo_sugerencias"].includes(activeMenu) && !servicesEnabled) ||
-      (activeMenu === "publicaciones_productos" && !productsEnabled) ||
       (activeMenu === "pqr" && !pqrEnabled) ||
       (activeMenu === "contrataciones" && !hiringsEnabled);
     if (blocked) setActiveMenu("inicio");
-  }, [activeMenu, benefitsEnabled, servicesEnabled, productsEnabled, pqrEnabled, hiringsEnabled]);
+  }, [activeMenu, benefitsEnabled, servicesEnabled, pqrEnabled, hiringsEnabled]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRequestTab, setActiveRequestTab] = useState<
     "Publicaciones" | "Profesionales" | "Productos" | "PQR" | "Fallas técnicas"
@@ -1330,71 +1527,9 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Gestión de productos en tienda (Admin)
-  const [adminProducts, setAdminProducts] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem("serviprox_store_products");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return [
-      {
-        id: "prod-1",
-        title: "Taladro Percutor Inalámbrico DeWalt 20V Max",
-        category: "Herramientas",
-        price: 380000,
-        description: "Incluye 2 baterías de litio de 2.0Ah, cargador rápido y maletín de transporte rígido. Excelente estado.",
-        sellerName: "Carlos Mendoza (Ing. Eléctrico)",
-        sellerRole: "Contratista",
-        phone: "+57 312 458 9912",
-        city: "Bogotá (Usaquén)",
-        image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=80",
-        date: "Hoy",
-      },
-      {
-        id: "prod-2",
-        title: "Escalera Telescópica de Aluminio 3.8m Multiuso",
-        category: "Equipos",
-        price: 240000,
-        description: "Capacidad de 150 kg, compacta y liviana, ideal para trabajos de pintura, drywall y redes eléctricas.",
-        sellerName: "Rodrigo Salamanca (Pintor Pro)",
-        sellerRole: "Contratista",
-        phone: "+57 320 889 1234",
-        city: "Bogotá (Chapinero)",
-        image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&auto=format&fit=crop&q=80",
-        date: "Ayer",
-      },
-      {
-        id: "prod-3",
-        title: "Kit Profesional de Pinza Voltiamperimétrica Fluke",
-        category: "Herramientas",
-        price: 520000,
-        description: "Medición True RMS, cables de prueba reforzados CAT IV y certificación de calibración vigente.",
-        sellerName: "Ferretería Eléctrica del Norte",
-        sellerRole: "Ferretería Aliada",
-        phone: "+57 301 234 5678",
-        city: "Bogotá (Suba)",
-        image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80",
-        date: "Hace 2 días",
-      },
-      {
-        id: "prod-4",
-        title: "Kit de Arnés de Seguridad + Línea de Vida 1.8m",
-        category: "Seguridad y EPP",
-        price: 195000,
-        description: "Norma ANSI Z359.11 para trabajo en alturas. 4 argollas en acero forjado, soporte lumbar ergonómico.",
-        sellerName: "Seguridad Industrial Andina",
-        sellerRole: "Ferretería Aliada",
-        phone: "+57 315 901 2345",
-        city: "Bogotá (Fontibón)",
-        image: "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=400&auto=format&fit=crop&q=80",
-        date: "Hace 3 días",
-      },
-    ];
-  });
-
+  // Gestión de productos en tienda (Admin): todo viene de la base de datos
+  const [adminProductsLoading, setAdminProductsLoading] = useState(false);
+  const [adminProductFilterRole, setAdminProductFilterRole] = useState("Todos");
   const [adminPublishModalOpen, setAdminPublishModalOpen] = useState(false);
   const [adminProductTitle, setAdminProductTitle] = useState("");
   const [adminProductCategory, setAdminProductCategory] = useState("Herramientas");
@@ -1402,52 +1537,93 @@ export const AdminDashboard: React.FC = () => {
   const [adminProductDescription, setAdminProductDescription] = useState("");
   const [adminProductCity, setAdminProductCity] = useState("Bogotá");
   const [adminProductPhone, setAdminProductPhone] = useState("+57 300 000 0000");
-  const [adminProductImage, setAdminProductImage] = useState(
-    "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=80"
-  );
+  const [adminProductImage, setAdminProductImage] = useState<File | null>(null);
   const [adminProductFilterCat, setAdminProductFilterCat] = useState("Todas");
   const [adminProductSearch, setAdminProductSearch] = useState("");
 
-  const handleAdminPublishProduct = (e: React.FormEvent) => {
+  const handleAdminPublishProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminProductTitle.trim()) {
       alert("Por favor ingresa el título del producto.");
       return;
     }
 
-    const created = {
-      id: `prod-admin-${Date.now()}`,
-      title: adminProductTitle.trim(),
-      category: adminProductCategory,
-      price: Number(adminProductPrice) || 10000,
-      description: adminProductDescription.trim() || "Producto oficial verificado por la administración de Serviprox.",
-      sellerName: "Administrador Serviprox",
-      sellerRole: "Administrador",
-      phone: adminProductPhone.trim() || "+57 300 000 0000",
-      city: adminProductCity.trim() || "Bogotá",
-      image: adminProductImage.trim() || "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=80",
-      date: "Hoy",
-    };
+    const form = new FormData();
+    form.append("title", adminProductTitle.trim());
+    form.append("category", adminProductCategory);
+    form.append("price", String(Number(adminProductPrice) || 10000));
+    form.append("description", adminProductDescription.trim() || "Producto oficial verificado por la administración de Serviprox.");
+    form.append("phone", adminProductPhone.trim());
+    form.append("city", adminProductCity.trim() || "Bogotá");
+    if (adminProductImage) form.append("image", adminProductImage);
 
-    const updated = [created, ...adminProducts];
-    setAdminProducts(updated);
     try {
-      localStorage.setItem("serviprox_store_products", JSON.stringify(updated));
-    } catch {}
+      await api.post("store/products/", form);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo publicar el producto en la base de datos.");
+      return;
+    }
 
+    await loadServerProducts();
     setAdminPublishModalOpen(false);
     setAdminProductTitle("");
     setAdminProductDescription("");
+    setAdminProductImage(null);
     alert("¡Producto publicado exitosamente en la tienda oficial!");
   };
 
-  const handleAdminDeleteProduct = (id: string | number) => {
-    if (!window.confirm("¿Estás seguro de eliminar este producto de la tienda?")) return;
-    const updated = adminProducts.filter((p) => p.id !== id);
-    setAdminProducts(updated);
+  const getSellerProfile = (role?: string): "Cliente" | "Profesional" | "Aliado" | "Administrador" => {
+    if (role === "Cliente") return "Cliente";
+    if (role === "Administrador") return "Administrador";
+    if (role === "Ferretería Aliada") return "Aliado";
+    return "Profesional";
+  };
+
+  const [serverProducts, setServerProducts] = useState<any[]>([]);
+  const [serverProductsError, setServerProductsError] = useState(false);
+
+  const loadServerProducts = async () => {
+    setAdminProductsLoading(true);
     try {
-      localStorage.setItem("serviprox_store_products", JSON.stringify(updated));
-    } catch {}
+      const data = await api.get<any[]>("store/products/");
+      setServerProducts(
+        data.map((item) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          price: item.price,
+          description: item.description,
+          sellerName: item.seller_name,
+          sellerRole: item.seller_role,
+          phone: item.phone,
+          city: item.city,
+          image: item.image_url || "",
+          date: new Date(item.created_at).toLocaleDateString("es-CO"),
+        }))
+      );
+      setServerProductsError(false);
+    } catch {
+      setServerProductsError(true);
+    } finally {
+      setAdminProductsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenu === "publicaciones_productos") void loadServerProducts();
+  }, [activeMenu]);
+
+  // Publicaciones de clientes, profesionales y administrador, leídas de la base de datos
+  const allAdminProducts = serverProducts;
+
+  const handleAdminDeleteProduct = async (product: { id: string | number }) => {
+    if (!window.confirm("¿Estás seguro de eliminar este producto de la tienda?")) return;
+    try {
+      await api.delete(`store/products/${product.id}/`);
+      await loadServerProducts();
+    } catch {
+      alert("No se pudo eliminar la publicación. Inténtalo nuevamente.");
+    }
   };
 
   // Lista de solicitudes recientes (idénticas a la imagen)
@@ -2199,12 +2375,18 @@ export const AdminDashboard: React.FC = () => {
   const [pqrDateFilter, setPqrDateFilter] = useState("Todas");
   const [isPqrDetailOpen, setIsPqrDetailOpen] = useState(true);
   const [selectedPqrCheckboxIds, setSelectedPqrCheckboxIds] = useState<string[]>([]);
+  const [pqrPage, setPqrPage] = useState(1);
+  const [pqrPageSize, setPqrPageSize] = useState(8);
+
+  useEffect(() => {
+    setPqrPage(1);
+  }, [pqrTab, pqrSearch, pqrTypeFilter, pqrStatusFilter, pqrPriorityFilter, pqrDateFilter, pqrPageSize]);
 
   // Estados del modal de Respuesta al cliente / notificación
   const [modalReplyPqrOpen, setModalReplyPqrOpen] = useState(false);
   const [targetPqrToReply, setTargetPqrToReply] = useState<PqrItem | null>(null);
   const [replyPqrText, setReplyPqrText] = useState("");
-  const [replyPqrStatus, setReplyPqrStatus] = useState<"En proceso" | "Resuelta" | "En revisión" | "Cerrada">("Resuelta");
+  const [replyPqrStatus, setReplyPqrStatus] = useState<PqrReplyStatus>("Resuelta");
   const [replySendNotification, setReplySendNotification] = useState(true);
 
   // Estados del modal de Nueva Solicitud (registro manual)
@@ -2719,6 +2901,17 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Toggle de Verificación de Profesional (impacta en BD)
+  const handleViewProCertificate = async (pro: ProfessionalItem) => {
+    try {
+      const blob = await api.blob(`professionals/${pro.id}/certificate/`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      window.alert(`${pro.display_name} no ha cargado un certificado profesional.`);
+    }
+  };
+
   const handleToggleProVerification = async (pro: ProfessionalItem) => {
     const newStatus = !pro.is_verified;
     setAllProsList((prev) =>
@@ -3264,12 +3457,21 @@ export const AdminDashboard: React.FC = () => {
     }
 
     setTargetPqrToReply(pqr);
-    setReplyPqrText(
-      `Estimado(a) ${pqr.client.name}, hemos revisado detalladamente su reporte (${pqr.id}: ${pqr.title}). Se han tomado las medidas pertinentes conforme a los estándares de Serviprox y se procedió con la solución formal del caso.`
-    );
+    setReplyPqrText(buildPqrAutoReply(pqr, "Resuelta"));
     setReplyPqrStatus("Resuelta");
     setReplySendNotification(true);
     setModalReplyPqrOpen(true);
+  };
+
+  const handleReplyStatusChange = (nextStatus: PqrReplyStatus) => {
+    if (targetPqrToReply) {
+      const previousAuto = buildPqrAutoReply(targetPqrToReply, replyPqrStatus);
+      // Solo se reemplaza el texto si el administrador no lo editó manualmente
+      if (!replyPqrText.trim() || replyPqrText === previousAuto) {
+        setReplyPqrText(buildPqrAutoReply(targetPqrToReply, nextStatus));
+      }
+    }
+    setReplyPqrStatus(nextStatus);
   };
 
   const handleConfirmReplyPqr = async () => {
@@ -3357,11 +3559,11 @@ export const AdminDashboard: React.FC = () => {
         item.id === pqr.id
           ? {
               ...item,
-              status: "Resuelta",
+              status: "Cerrada",
               updatedDate: dateNowStr,
               timeline: [
                 ...item.timeline,
-                { date: dateNowStr, text: "Caso cerrado con resolución favorable por el administrador" },
+                { date: dateNowStr, text: "Caso cerrado y archivado por el administrador" },
               ],
             }
           : item
@@ -3371,8 +3573,8 @@ export const AdminDashboard: React.FC = () => {
     await adminService.executeAction({
       action: "respond_pqr",
       target_id: pqr.raw_id || pqr.id,
-      response_text: "Caso cerrado formalmente por el administrador.",
-      new_status: "resuelto",
+      response_text: buildPqrAutoReply(pqr, "Cerrada"),
+      new_status: "cerrada",
       admin_name: adminDisplayName,
       send_notification: true,
     });
@@ -3547,6 +3749,22 @@ export const AdminDashboard: React.FC = () => {
     return true;
   });
 
+  const pqrTotalPages = Math.max(1, Math.ceil(filteredPqrList.length / pqrPageSize));
+  const pqrCurrentPage = Math.min(pqrPage, pqrTotalPages);
+  const pqrPageStart = (pqrCurrentPage - 1) * pqrPageSize;
+  const pagedPqrList = filteredPqrList.slice(pqrPageStart, pqrPageStart + pqrPageSize);
+  const pqrPageNumbers: Array<number | "..."> = (() => {
+    if (pqrTotalPages <= 7) return Array.from({ length: pqrTotalPages }, (_, i) => i + 1);
+    const pages = new Set([1, pqrTotalPages, pqrCurrentPage - 1, pqrCurrentPage, pqrCurrentPage + 1]);
+    const sorted = Array.from(pages).filter((p) => p >= 1 && p <= pqrTotalPages).sort((a, b) => a - b);
+    const result: Array<number | "..."> = [];
+    sorted.forEach((p, i) => {
+      if (i > 0 && p - sorted[i - 1] > 1) result.push("...");
+      result.push(p);
+    });
+    return result;
+  })();
+
   const selectedPqr = pqrList.find((p) => p.id === selectedPqrId) || pqrList[0];
 
   const handleTogglePqrCheckbox = (id: string) => {
@@ -3720,13 +3938,25 @@ export const AdminDashboard: React.FC = () => {
               )}
             </div>
 
+            {/* Tienda: el administrador siempre puede gestionarla, aunque esté desactivada para los usuarios */}
+            <button
+              type="button"
+              className={`ad-nav-item ${activeMenu === "publicaciones_productos" ? "active" : ""}`}
+              onClick={() => setActiveMenu("publicaciones_productos")}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1.003 1.003 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+              <span>Tienda</span>
+            </button>
+
             {/* Grupo: Publicaciones */}
-            {publicationsEnabled && (
+            {servicesEnabled && (
             <div>
               <button
                 type="button"
                 className={`ad-nav-item ${
-                  activeMenu.startsWith("publicaciones") || activeMenu.startsWith("catalogo") ? "active" : ""
+                  activeMenu === "publicaciones_servicios" || activeMenu.startsWith("catalogo") ? "active" : ""
                 }`}
                 onClick={() => setMenuPublicacionesOpen((prev) => !prev)}
               >
@@ -3775,17 +4005,6 @@ export const AdminDashboard: React.FC = () => {
                   </button>
                   </>
                   )}
-                  {productsEnabled && (
-                  <button
-                    type="button"
-                    className={`ad-subnav-item ${
-                      activeMenu === "publicaciones_productos" ? "active" : ""
-                    }`}
-                    onClick={() => setActiveMenu("publicaciones_productos")}
-                  >
-                    Productos (Tienda)
-                  </button>
-                  )}
                 </div>
               )}
             </div>
@@ -3804,6 +4023,18 @@ export const AdminDashboard: React.FC = () => {
               <span>Contrataciones</span>
             </button>
             )}
+
+            {/* Pagos */}
+            <button
+              type="button"
+              className={`ad-nav-item ${activeMenu === "pagos" ? "active" : ""}`}
+              onClick={() => setActiveMenu("pagos")}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
+              </svg>
+              <span>Pagos e ingresos</span>
+            </button>
 
             {/* PQR y Reportes */}
             {pqrEnabled && (
@@ -5294,6 +5525,17 @@ export const AdminDashboard: React.FC = () => {
 
                                 <button
                                   type="button"
+                                  className="ad-action-pill verify"
+                                  title={pro.has_certificate ? "Ver certificado profesional cargado" : "Este profesional no ha cargado certificado"}
+                                  disabled={pro.has_certificate === false}
+                                  style={pro.has_certificate === false ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                                  onClick={() => void handleViewProCertificate(pro)}
+                                >
+                                  📄 Certificado
+                                </button>
+
+                                <button
+                                  type="button"
                                   className="ad-action-pill block"
                                   title="Eliminar cuenta de la base de datos"
                                   onClick={() => handleDeleteAccount("professional", pro.id, pro.display_name)}
@@ -5617,7 +5859,7 @@ export const AdminDashboard: React.FC = () => {
                             </td>
                           </tr>
                         ) : (
-                          filteredPqrList.map((item) => {
+                          pagedPqrList.map((item) => {
                             const isSelectedRow = selectedPqrId === item.id;
                             const isChecked = selectedPqrCheckboxIds.includes(item.id);
                             const priorityClass = item.priority.toLowerCase();
@@ -5779,22 +6021,56 @@ export const AdminDashboard: React.FC = () => {
 
                   {/* Paginación */}
                   <div className="ad-ben-pagination">
-                    <div>Mostrando 1-8 de 184 solicitudes</div>
+                    <div>
+                      {filteredPqrList.length === 0
+                        ? "Mostrando 0 solicitudes"
+                        : `Mostrando ${pqrPageStart + 1}-${pqrPageStart + pagedPqrList.length} de ${filteredPqrList.length} solicitudes`}
+                    </div>
                     <div className="ad-ben-page-nums">
-                      <button type="button" className="ad-ben-page-btn" aria-label="Página anterior">‹</button>
-                      <button type="button" className="ad-ben-page-btn active">1</button>
-                      <button type="button" className="ad-ben-page-btn">2</button>
-                      <button type="button" className="ad-ben-page-btn">3</button>
-                      <button type="button" className="ad-ben-page-btn">4</button>
-                      <button type="button" className="ad-ben-page-btn">5</button>
-                      <span style={{ padding: "0 4px", color: "#94a3b8" }}>...</span>
-                      <button type="button" className="ad-ben-page-btn" aria-label="Página siguiente">›</button>
+                      <button
+                        type="button"
+                        className="ad-ben-page-btn"
+                        aria-label="Página anterior"
+                        disabled={pqrCurrentPage <= 1}
+                        onClick={() => setPqrPage(Math.max(1, pqrCurrentPage - 1))}
+                      >
+                        ‹
+                      </button>
+                      {pqrPageNumbers.map((p, idx) =>
+                        p === "..." ? (
+                          <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "#94a3b8" }}>...</span>
+                        ) : (
+                          <button
+                            key={p}
+                            type="button"
+                            className={`ad-ben-page-btn${p === pqrCurrentPage ? " active" : ""}`}
+                            aria-current={p === pqrCurrentPage ? "page" : undefined}
+                            onClick={() => setPqrPage(p)}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        className="ad-ben-page-btn"
+                        aria-label="Página siguiente"
+                        disabled={pqrCurrentPage >= pqrTotalPages}
+                        onClick={() => setPqrPage(Math.min(pqrTotalPages, pqrCurrentPage + 1))}
+                      >
+                        ›
+                      </button>
                     </div>
                     <div>
-                      <select className="ad-search-input" style={{ height: "30px", fontSize: "0.78rem", padding: "0 8px" }}>
-                        <option>Mostrar 8 por página</option>
-                        <option>Mostrar 15 por página</option>
-                        <option>Mostrar 25 por página</option>
+                      <select
+                        className="ad-search-input"
+                        style={{ height: "30px", fontSize: "0.78rem", padding: "0 8px" }}
+                        value={pqrPageSize}
+                        onChange={(e) => setPqrPageSize(Number(e.target.value))}
+                      >
+                        <option value={8}>Mostrar 8 por página</option>
+                        <option value={15}>Mostrar 15 por página</option>
+                        <option value={25}>Mostrar 25 por página</option>
                       </select>
                     </div>
                   </div>
@@ -7087,7 +7363,7 @@ export const AdminDashboard: React.FC = () => {
           {/* ═════════════════════════════════════════════════════════════════
               VISTA: GESTIÓN Y PUBLICACIÓN DE PRODUCTOS (TIENDA)
              ═════════════════════════════════════════════════════════════════ */}
-          {activeMenu === "publicaciones_productos" && productsEnabled && (
+          {activeMenu === "publicaciones_productos" && (
             <section className="ad-products-view" aria-label="Gestión de Productos en Tienda">
               <div
                 className="ad-view-header"
@@ -7107,10 +7383,17 @@ export const AdminDashboard: React.FC = () => {
                   </p>
                 </div>
                 <div>
-                  {/* Botón idéntico a la captura del usuario */}
+                  {/* Lleva a los reportes de publicaciones dentro de PQR y Reportes */}
                   <button
                     type="button"
-                    onClick={() => setAdminPublishModalOpen(true)}
+                    onClick={() => {
+                      if (!pqrEnabled) {
+                        alert("El módulo PQR y Reportes está desactivado en Configuración.");
+                        return;
+                      }
+                      setPqrTab("Reportes");
+                      setActiveMenu("pqr");
+                    }}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -7127,8 +7410,8 @@ export const AdminDashboard: React.FC = () => {
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <span style={{ fontSize: "1.3rem", lineHeight: 1, fontWeight: "900" }}>⊕</span>
-                    Publicar Producto
+                    <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>🚩</span>
+                    Reporte de la publicación
                   </button>
                 </div>
               </div>
@@ -7138,44 +7421,172 @@ export const AdminDashboard: React.FC = () => {
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
                     <span className="ad-kpi-label">Total Productos</span>
-                    <span className="ad-kpi-value">{adminProducts.length}</span>
+                    <span className="ad-kpi-value">{allAdminProducts.length}</span>
                   </div>
                   <div className="ad-kpi-icon blue">🛍️</div>
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">Herramientas y Equipos</span>
+                    <span className="ad-kpi-label">De Clientes</span>
                     <span className="ad-kpi-value">
-                      {adminProducts.filter((p) => p.category === "Herramientas" || p.category === "Equipos").length}
+                      {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Cliente").length}
                     </span>
                   </div>
-                  <div className="ad-kpi-icon orange">🛠️</div>
+                  <div className="ad-kpi-icon orange">🏠</div>
+                </div>
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-info">
+                    <span className="ad-kpi-label">De Profesionales</span>
+                    <span className="ad-kpi-value">
+                      {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Profesional").length}
+                    </span>
+                  </div>
+                  <div className="ad-kpi-icon teal">🧰</div>
+                </div>
+                <div className="ad-kpi-card">
+                  <div className="ad-kpi-info">
+                    <span className="ad-kpi-label">Aliados</span>
+                    <span className="ad-kpi-value">
+                      {allAdminProducts.filter((p) => getSellerProfile(p.sellerRole) === "Aliado").length}
+                    </span>
+                  </div>
+                  <div className="ad-kpi-icon blue">🏢</div>
                 </div>
                 <div className="ad-kpi-card">
                   <div className="ad-kpi-info">
                     <span className="ad-kpi-label">Publicados por Admin</span>
                     <span className="ad-kpi-value">
-                      {adminProducts.filter((p) => p.sellerRole === "Administrador").length}
+                      {allAdminProducts.filter((p) => p.sellerRole === "Administrador").length}
                     </span>
                   </div>
                   <div className="ad-kpi-icon purple">👑</div>
                 </div>
-                <div className="ad-kpi-card">
-                  <div className="ad-kpi-info">
-                    <span className="ad-kpi-label">Aliados y Contratistas</span>
-                    <span className="ad-kpi-value">
-                      {adminProducts.filter((p) => p.sellerRole !== "Administrador").length}
-                    </span>
-                  </div>
-                  <div className="ad-kpi-icon teal">🏢</div>
-                </div>
               </div>
+
+              {/* PQR y Reportes de la tienda */}
+              {(() => {
+                const storePqrs = pqrList.filter((item) => /tienda|publicaci/i.test(item.relatedTo));
+                return (
+                  <div className="ad-card" style={{ marginBottom: "24px", padding: "16px 20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "12px", flexWrap: "wrap" }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>🚩 PQR y Reportes de la tienda</h3>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                          Quejas, reclamos y reportes relacionados con productos y publicaciones ({storePqrs.length}).
+                        </p>
+                      </div>
+                      {pqrEnabled && (
+                        <button
+                          type="button"
+                          className="ad-btn ad-btn-secondary"
+                          onClick={() => {
+                            setPqrTab("Todas");
+                            setPqrSearch("");
+                            setActiveMenu("pqr");
+                          }}
+                        >
+                          Ver todos en PQR y Reportes
+                        </button>
+                      )}
+                    </div>
+                    {storePqrs.length === 0 ? (
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>No hay solicitudes relacionadas con la tienda.</p>
+                    ) : (
+                      <div className="ad-table-responsive">
+                        <table className="ad-table">
+                          <thead>
+                            <tr>
+                              <th>Tipo</th>
+                              <th>Solicitud</th>
+                              <th>Usuario</th>
+                              <th>Relacionado con</th>
+                              <th>Estado</th>
+                              <th style={{ textAlign: "right" }}>Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {storePqrs.slice(0, 6).map((item) => (
+                              <tr key={item.id}>
+                                <td>
+                                  <span style={{ display: "inline-block", padding: "3px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700, background: item.typeBg, color: item.typeColor }}>
+                                    {item.typeLabel}
+                                  </span>
+                                </td>
+                                <td>
+                                  <strong style={{ color: "#2563eb", fontSize: "0.85rem" }}>{item.id}</strong>{" "}
+                                  <span style={{ fontSize: "0.85rem", color: "#0f172a", fontWeight: 600 }}>{item.title}</span>
+                                </td>
+                                <td style={{ fontSize: "0.82rem" }}>{item.client.name}</td>
+                                <td style={{ fontSize: "0.82rem" }}>{item.relatedTo}</td>
+                                <td>
+                                  <span
+                                    className={`ad-pqr-status-pill ${
+                                      item.status === "En revisión"
+                                        ? "revision"
+                                        : item.status === "Abierta"
+                                        ? "abierta"
+                                        : item.status === "En proceso"
+                                        ? "proceso"
+                                        : "resuelta"
+                                    }`}
+                                  >
+                                    {item.status}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: "right" }}>
+                                  {pqrEnabled && (
+                                    <button
+                                      type="button"
+                                      className="ad-btn ad-btn-secondary"
+                                      onClick={() => {
+                                        setSelectedPqrId(item.id);
+                                        setIsPqrDetailOpen(true);
+                                        setPqrTab("Todas");
+                                        setPqrSearch(item.id);
+                                        setActiveMenu("pqr");
+                                      }}
+                                    >
+                                      Ver caso
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Filtros y Buscador */}
               <div className="ad-card" style={{ marginBottom: "24px", padding: "16px 20px" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#475569" }}>Perfil del vendedor:</span>
+                  {["Todos", "Cliente", "Profesional", "Aliado", "Administrador"].map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => setAdminProductFilterRole(role)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "999px",
+                        border: adminProductFilterRole === role ? "1px solid #0f172a" : "1px solid #e2e8f0",
+                        background: adminProductFilterRole === role ? "#0f172a" : "#ffffff",
+                        color: adminProductFilterRole === role ? "#ffffff" : "#475569",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {role === "Todos" ? "Todos" : role === "Aliado" ? "Aliados" : role === "Administrador" ? "Admin" : `${role}s`}
+                    </button>
+                  ))}
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {["Todas", "Herramientas", "Equipos", "Seguridad y EPP", "Materiales"].map((cat) => (
+                    {["Todas", ...STORE_CATEGORIES].map((cat) => (
                       <button
                         key={cat}
                         type="button"
@@ -7213,16 +7624,38 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {!productsEnabled && (
+                <div style={{ marginBottom: "16px", padding: "10px 14px", borderRadius: "10px", background: "#e0e7ff", color: "#3730a3", fontSize: "0.85rem" }}>
+                  La tienda está desactivada para clientes y profesionales (Configuración → General). Aquí puedes seguir gestionando las publicaciones.
+                </div>
+              )}
+
+              {serverProductsError && (
+                <div style={{ marginBottom: "16px", padding: "10px 14px", borderRadius: "10px", background: "#fef3c7", color: "#92400e", fontSize: "0.85rem" }}>
+                  No se pudieron cargar las publicaciones reales de clientes y profesionales. Verifica la conexión con el servidor.
+                </div>
+              )}
+
+              {adminProductsLoading && allAdminProducts.length === 0 && (
+                <p style={{ color: "#64748b", fontSize: "0.9rem" }}>Cargando publicaciones desde la base de datos...</p>
+              )}
+              {!adminProductsLoading && !serverProductsError && allAdminProducts.length === 0 && (
+                <p style={{ color: "#64748b", fontSize: "0.9rem" }}>
+                  Aún no hay productos publicados en la tienda. Los que publiquen clientes y profesionales aparecerán aquí.
+                </p>
+              )}
+
               {/* Grilla de Productos */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
-                {adminProducts
+                {allAdminProducts
                   .filter((p) => adminProductFilterCat === "Todas" || p.category === adminProductFilterCat)
+                  .filter((p) => adminProductFilterRole === "Todos" || getSellerProfile(p.sellerRole) === adminProductFilterRole)
                   .filter(
                     (p) =>
                       !adminProductSearch.trim() ||
                       p.title.toLowerCase().includes(adminProductSearch.toLowerCase()) ||
-                      p.sellerName.toLowerCase().includes(adminProductSearch.toLowerCase()) ||
-                      p.city.toLowerCase().includes(adminProductSearch.toLowerCase())
+                      (p.sellerName || "").toLowerCase().includes(adminProductSearch.toLowerCase()) ||
+                      (p.city || "").toLowerCase().includes(adminProductSearch.toLowerCase())
                   )
                   .map((p) => (
                     <div
@@ -7238,7 +7671,13 @@ export const AdminDashboard: React.FC = () => {
                       }}
                     >
                       <div style={{ position: "relative", height: "160px", background: "#f8fafc" }}>
-                        <img src={p.image} alt={p.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        {p.image ? (
+                          <img src={p.image} alt={p.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "0.85rem" }}>
+                            Sin imagen
+                          </div>
+                        )}
                         <span
                           style={{
                             position: "absolute",
@@ -7302,7 +7741,29 @@ export const AdminDashboard: React.FC = () => {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "0.78rem" }}>
                             <div>
                               <strong style={{ display: "block", color: "#1e293b" }}>{p.sellerName}</strong>
-                              <span style={{ color: "#64748b" }}>{p.sellerRole}</span>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  marginTop: "2px",
+                                  padding: "2px 8px",
+                                  borderRadius: "999px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  background:
+                                    getSellerProfile(p.sellerRole) === "Cliente"
+                                      ? "#F5C3BA"
+                                      : getSellerProfile(p.sellerRole) === "Profesional"
+                                      ? "#D3DCF2"
+                                      : "#f1f5f9",
+                                  color: "#1e293b",
+                                }}
+                              >
+                                {getSellerProfile(p.sellerRole) === "Cliente"
+                                  ? "🏠 Perfil cliente"
+                                  : getSellerProfile(p.sellerRole) === "Profesional"
+                                  ? "🧰 Perfil profesional"
+                                  : p.sellerRole}
+                              </span>
                             </div>
                             <span style={{ color: "#94a3b8" }}>{p.date}</span>
                           </div>
@@ -7328,7 +7789,7 @@ export const AdminDashboard: React.FC = () => {
                             </a>
                             <button
                               type="button"
-                              onClick={() => handleAdminDeleteProduct(p.id)}
+                              onClick={() => handleAdminDeleteProduct(p)}
                               style={{
                                 padding: "8px 12px",
                                 borderRadius: "8px",
@@ -7443,12 +7904,9 @@ export const AdminDashboard: React.FC = () => {
                               background: "white",
                             }}
                           >
-                            <option>Herramientas</option>
-                            <option>Equipos</option>
-                            <option>Seguridad y EPP</option>
-                            <option>Materiales</option>
-                            <option>Pinturas y Acabados</option>
-                            <option>Eléctricos</option>
+                            {STORE_CATEGORIES.map((cat) => (
+                              <option key={cat}>{cat}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -7497,13 +7955,12 @@ export const AdminDashboard: React.FC = () => {
 
                       <div>
                         <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "6px" }}>
-                          URL de imagen
+                          Imagen del producto (máx. 5 MB)
                         </label>
                         <input
-                          type="url"
-                          placeholder="https://..."
-                          value={adminProductImage}
-                          onChange={(e) => setAdminProductImage(e.target.value)}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setAdminProductImage(e.target.files?.[0] ?? null)}
                           style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
                         />
                       </div>
@@ -7563,6 +8020,7 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {activeMenu === "configuracion" && <AdminSettings />}
+          {activeMenu === "pagos" && <AdminPayments onOpenSettings={() => setActiveMenu("configuracion")} />}
 
           {/* ═════════════════════════════════════════════════════════════════
               VISTA: HISTORIAL DE AUDITORÍA
@@ -10579,6 +11037,14 @@ export const AdminDashboard: React.FC = () => {
                 <>
                   <button
                     type="button"
+                    className="ad-btn ad-btn-secondary"
+                    disabled={selectedDetailItem.has_certificate === false}
+                    onClick={() => void handleViewProCertificate(selectedDetailItem)}
+                  >
+                    📄 Ver certificado
+                  </button>
+                  <button
+                    type="button"
                     className="ad-btn ad-btn-primary"
                     onClick={() => {
                       handleToggleProVerification(selectedDetailItem);
@@ -10685,7 +11151,7 @@ export const AdminDashboard: React.FC = () => {
                 <select
                   className="ad-form-control"
                   value={replyPqrStatus}
-                  onChange={(e) => setReplyPqrStatus(e.target.value as any)}
+                  onChange={(e) => handleReplyStatusChange(e.target.value as PqrReplyStatus)}
                   disabled={isTramiClosed(targetPqrToReply.status)}
                 >
                   <option value="En proceso">En proceso (Investigación técnica en curso)</option>

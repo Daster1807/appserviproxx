@@ -7,6 +7,7 @@ from apps.accounts.models import UserRole
 from apps.service_requests.models import ServiceRequest
 from apps.service_requests.services import professional_offers_service
 
+from .holds import assert_client_can_hire, assert_professional_can_work
 from .models import Order, OrderEvent, Review, WorkEvidence
 from .services import ALLOWED_TRANSITIONS, refresh_rating, is_assigned_professional, is_order_client, price_bounds, valid_price_bounds
 
@@ -172,6 +173,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate_service_request(self, service_request):
         if service_request.client_id != self.context["request"].user.id:
             raise serializers.ValidationError("La solicitud no pertenece a este usuario.")
+        assert_client_can_hire(self.context["request"].user)
         if service_request.status not in {ServiceRequest.Status.OPEN, ServiceRequest.Status.MATCHED}:
             raise serializers.ValidationError("La solicitud ya no permite crear una orden.")
         return service_request
@@ -183,7 +185,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Solo el cliente puede solicitar una orden.")
         if professional.user_id == service_request.client_id:
             raise serializers.ValidationError({"professional": "No puedes contratar tu propio perfil profesional."})
-
+        assert_professional_can_work(professional)
         if service_request.selected_service_id and not professional_offers_service(
             professional, service_request.selected_service_id
         ):

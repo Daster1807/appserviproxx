@@ -38,7 +38,13 @@ export interface User {
   is_currently_blocked?: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
+  has_professional_certificate?: boolean;
   created_at: string;
+}
+
+export interface ProfessionalCertificatePayload {
+  profession: string;
+  file: File;
 }
 
 export interface UpdateMePayload {
@@ -77,6 +83,8 @@ export interface RegisterPayload {
   address?: string;
   role: PublicRegisterRole;
   password: string;
+  profession?: string;
+  certificate?: File;
 }
 
 export interface Service {
@@ -292,7 +300,7 @@ export interface RequestOrder {
   payment_confirmed_at: string | null;
 }
 
-export type OrderPaymentStatus = "pending" | "paid";
+export type OrderPaymentStatus = "pending" | "paid" | "refunded";
 
 export interface Order {
   viewer_role?: "client" | "professional" | "staff" | "none";

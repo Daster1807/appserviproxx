@@ -347,6 +347,7 @@ class DirectedServiceRequestTests(TestCase):
         self.api.force_authenticate(user=self.pro_user)
         self.api.post(f"/api/v1/requests/{service_request.id}/accept/")
         order = Order.objects.get(service_request=service_request)
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
 
         self.api.force_authenticate(user=self.client_user)
         first = self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/")
@@ -358,7 +359,7 @@ class DirectedServiceRequestTests(TestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
         self.assertEqual(order.payment_reference, f"DEV-{order.id}")
 
-    def test_order_can_complete_with_payment_still_pending(self):
+    def test_order_can_complete_with_pending_payment_and_suspends_accounts(self):
         service_request = ServiceRequest.objects.create(
             client=self.client_user,
             household=self.household,
@@ -389,6 +390,43 @@ class DirectedServiceRequestTests(TestCase):
         self.assertTrue(OrderEvent.objects.filter(order=order, status=Order.Status.COMPLETED).exists())
         service_request.refresh_from_db()
         self.assertEqual(service_request.status, ServiceRequest.Status.CLOSED)
+
+        # El cliente no puede contratar más y el profesional no puede aceptar mientras no se pague.
+        self.api.force_authenticate(user=self.client_user)
+        blocked = self.api.get("/api/v1/payments/hold/")
+        self.assertTrue(blocked.data["hold"])
+        self.api.force_authenticate(user=self.pro_user)
+        self.assertTrue(self.api.get("/api/v1/payments/hold/").data["hold"])
+
+        # Al pagar, ambas cuentas se reactivan solas.
+        self.api.force_authenticate(user=self.client_user)
+        self.assertEqual(self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/").status_code, 200)
+        self.assertFalse(self.api.get("/api/v1/payments/hold/").data["hold"])
+        self.api.force_authenticate(user=self.pro_user)
+        self.assertFalse(self.api.get("/api/v1/payments/hold/").data["hold"])
+
+    def test_payment_is_only_enabled_after_work_is_completed(self):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            household=self.household,
+            selected_category=self.category,
+            selected_service=self.service,
+            professional=self.profile,
+            description="Pago anticipado",
+        )
+        order = Order.objects.create(
+            service_request=service_request,
+            professional=self.profile,
+            client=self.client_user,
+            status=Order.Status.ARRIVED,
+        )
+
+        self.api.force_authenticate(user=self.client_user)
+        early = self.api.post(f"/api/v1/orders/{order.id}/confirm-demo-payment/")
+        self.assertEqual(early.status_code, 400)
+        self.assertEqual(self.api.post(f"/api/v1/orders/{order.id}/wompi-checkout/").status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
 
     def test_order_can_complete_with_confirmed_payment(self):
         service_request = ServiceRequest.objects.create(

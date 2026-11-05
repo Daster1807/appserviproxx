@@ -181,6 +181,21 @@ const WorkTrackingPage: React.FC = () => {
                 </div>
                 {isClient && <p className="tracking-hint">La tarifa la confirma el profesional dentro del rango publicado y aquí se muestra para consulta.</p>}
               </section>
+              {status === "completed" && order.payment_status === "pending" && (
+                <section className="tracking-card" aria-label="Pago pendiente">
+                  <h2>Pago pendiente</h2>
+                  <p>
+                    {isClient
+                      ? "Paga el servicio terminado para reactivar tu cuenta y la del profesional."
+                      : "Tu cuenta se reactivará cuando el cliente pague el servicio terminado."}
+                  </p>
+                  {isClient && (
+                    <IonButton routerLink={`/cliente/historialpago?order=${order.id}`}>
+                      Pagar servicio
+                    </IonButton>
+                  )}
+                </section>
+              )}
               {isProfessional && <ProfessionalTrackingControls key={`professional-${order.id}`} order={order} disabled={acting || !!error}
                 onTransition={requestTransition} onEvidence={uploadEvidence} onPrice={(amount) => {
                   void perform(async () => { setOrder(await orderService.setFinalPrice(order.id, amount)); setToast("Valor final guardado."); });

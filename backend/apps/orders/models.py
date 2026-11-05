@@ -26,6 +26,12 @@ class Order(models.Model):
     class PaymentStatus(models.TextChoices):
         PENDING = "pending", _("Pendiente de pago")
         PAID = "paid", _("Pagado")
+        REFUNDED = "refunded", _("Reembolsado")
+
+    class PayoutStatus(models.TextChoices):
+        PENDING = "pending", _("Pendiente de liquidación")
+        SETTLED = "settled", _("Liquidado")
+        REFUNDED = "refunded", _("Reembolsado")
 
     service_request = models.ForeignKey(
         ServiceRequest, related_name="orders", on_delete=models.PROTECT
@@ -45,6 +51,14 @@ class Order(models.Model):
     )
     payment_confirmed_at = models.DateTimeField(null=True, blank=True)
     payment_reference = models.CharField(max_length=80, blank=True)
+    # Reparto del pago: se fija al confirmarse el cobro con la comisión vigente.
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    commission_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    professional_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    payout_status = models.CharField(
+        max_length=20, choices=PayoutStatus.choices, default=PayoutStatus.PENDING
+    )
+    payout_settled_at = models.DateTimeField(null=True, blank=True)
     scheduled_for = models.DateTimeField(_("visita agendada"), null=True, blank=True)
     estimate_min = models.DecimalField(
         _("estimado minimo"), max_digits=12, decimal_places=2, null=True, blank=True
@@ -86,6 +100,7 @@ class Payment(models.Model):
         DECLINED = "declined", _("Rechazado")
         VOIDED = "voided", _("Anulado")
         ERROR = "error", _("Error")
+        REFUNDED = "refunded", _("Reembolsado")
 
     order = models.ForeignKey(Order, related_name="payments", on_delete=models.CASCADE)
     client = models.ForeignKey(
@@ -105,6 +120,68 @@ class Payment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.reference} · {self.status}"
+
+
+class Withdrawal(models.Model):
+    """Solicitud de retiro del saldo liquidado de un profesional."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        APPROVED = "approved", _("Aprobado")
+        PAID = "paid", _("Transferido")
+        REJECTED = "rejected", _("Rechazado")
+
+    professional = models.ForeignKey(
+        ProfessionalProfile, related_name="withdrawals", on_delete=models.PROTECT
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    destination = models.CharField(_("cuenta de destino"), max_length=160)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    transfer_reference = models.CharField(max_length=80, blank=True)
+    note = models.CharField(max_length=240, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Retiro #{self.pk} · {self.amount} · {self.status}"
+
+
+class Refund(models.Model):
+    """Reembolso total del pago de una orden, gestionado por el administrador."""
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", _("Solicitado")
+        APPROVED = "approved", _("Aprobado")
+        REJECTED = "rejected", _("Rechazado")
+
+    order = models.ForeignKey(Order, related_name="refunds", on_delete=models.PROTECT)
+    payment = models.ForeignKey(
+        Payment, related_name="refunds", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=240)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
+    note = models.CharField(max_length=240, blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Reembolso #{self.pk} · orden {self.order_id} · {self.status}"
 
 
 class WorkEvidence(models.Model):

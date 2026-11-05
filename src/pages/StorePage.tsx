@@ -121,61 +121,6 @@ const compressImage = (file: File): Promise<File> =>
     img.src = url;
   });
 
-const INITIAL_STORE_PRODUCTS: StoreProduct[] = [
-  {
-    id: "prod-1",
-    title: "Taladro Percutor Inalámbrico DeWalt 20V Max",
-    category: "Herramientas",
-    price: 380000,
-    description: "Incluye 2 baterías de litio de 2.0Ah, cargador rápido y maletín de transporte rígido. Excelente estado.",
-    sellerName: "Carlos Mendoza (Ing. Eléctrico)",
-    sellerRole: "Contratista",
-    phone: "+57 312 458 9912",
-    city: "Bogotá (Usaquén)",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=80",
-    date: "Hoy",
-  },
-  {
-    id: "prod-2",
-    title: "Escalera Telescópica de Aluminio 3.8m Multiuso",
-    category: "Equipos",
-    price: 240000,
-    description: "Capacidad de 150 kg, compacta y liviana, ideal para trabajos de pintura, drywall y redes eléctricas.",
-    sellerName: "Rodrigo Salamanca (Pintor Pro)",
-    sellerRole: "Contratista",
-    phone: "+57 320 889 1234",
-    city: "Bogotá (Chapinero)",
-    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&auto=format&fit=crop&q=80",
-    date: "Ayer",
-  },
-  {
-    id: "prod-3",
-    title: "Kit Profesional de Pinza Voltiamperimétrica Fluke",
-    category: "Herramientas",
-    price: 520000,
-    description: "Medición True RMS, cables de prueba reforzados CAT IV y certificación de calibración vigente.",
-    sellerName: "Ferretería Eléctrica del Norte",
-    sellerRole: "Ferretería Aliada",
-    phone: "+57 301 234 5678",
-    city: "Bogotá (Suba)",
-    image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80",
-    date: "Hace 2 días",
-  },
-  {
-    id: "prod-4",
-    title: "Kit de Arnés de Seguridad + Línea de Vida 1.8m",
-    category: "Seguridad y EPP",
-    price: 195000,
-    description: "Norma ANSI Z359.11 para trabajo en alturas. 4 argollas en acero forjado, soporte lumbar ergonómico.",
-    sellerName: "Seguridad Industrial Andina",
-    sellerRole: "Ferretería Aliada",
-    phone: "+57 315 901 2345",
-    city: "Bogotá (Fontibón)",
-    image: "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=400&auto=format&fit=crop&q=80",
-    date: "Hace 3 días",
-  },
-];
-
 export const StorePage: React.FC = () => {
   const { user } = useAuth();
   const history = useHistory();
@@ -183,7 +128,7 @@ export const StorePage: React.FC = () => {
   const productsEnabled = platform.features.products;
 
   const [serverProducts, setServerProducts] = useState<StoreProduct[]>([]);
-  const products = [...serverProducts, ...INITIAL_STORE_PRODUCTS];
+  const products = serverProducts;
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todas");

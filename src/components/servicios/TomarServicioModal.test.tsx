@@ -40,6 +40,7 @@ function mount() {
   return { ...view, close, success, props };
 }
 const photo = (name: string) => new File(["image"], name, { type: "image/png" });
+const problemPhotoInput = () => screen.getByLabelText("Fotos del problema", { selector: "input" });
 
 describe("Fotos antes de enviar Tomar servicio", () => {
   it("el perfil profesional propio nunca aparece entre los candidatos seleccionables", async () => {
@@ -58,7 +59,7 @@ describe("Fotos antes de enviar Tomar servicio", () => {
     await screen.findByText(service.name);
     const removed = photo("antes.png");
     const retained = photo("problema.png");
-    fireEvent.change(screen.getByLabelText("Fotos del problema"), { target: { files: [removed, retained] } });
+    fireEvent.change(problemPhotoInput(), { target: { files: [removed, retained] } });
     expect(await screen.findByAltText("Foto adjunta 2")).toBeInTheDocument();
     expect(serviceRequestService.create).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Quitar foto 1" }));
@@ -82,7 +83,7 @@ describe("Fotos antes de enviar Tomar servicio", () => {
   it("conserva las fotos si falla el envío para poder reintentar", async () => {
     const { close } = mount();
     await screen.findByText(service.name);
-    fireEvent.change(screen.getByLabelText("Fotos del problema"), { target: { files: [photo("problema.png")] } });
+    fireEvent.change(problemPhotoInput(), { target: { files: [photo("problema.png")] } });
     vi.mocked(serviceRequestService.create).mockRejectedValue(new ApiError(503, "Error", { detail: "No se pudo guardar la solicitud." }));
     fireEvent.click(screen.getByRole("button", { name: /Confirmar dirección y tomar servicio/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo guardar la solicitud.");
@@ -93,7 +94,7 @@ describe("Fotos antes de enviar Tomar servicio", () => {
   it("limpia las fotos y sus vistas previas al cerrar y volver a abrir", async () => {
     const view = mount();
     await screen.findByText(service.name);
-    fireEvent.change(screen.getByLabelText("Fotos del problema"), { target: { files: [photo("problema.png")] } });
+    fireEvent.change(problemPhotoInput(), { target: { files: [photo("problema.png")] } });
     await screen.findByAltText("Foto adjunta 1");
     view.rerender(<MemoryRouter><TomarServicioModal {...view.props} isOpen={false} /></MemoryRouter>);
     await waitFor(() => expect(revokeURL).toHaveBeenCalled());
@@ -105,7 +106,7 @@ describe("Fotos antes de enviar Tomar servicio", () => {
   it("rechaza archivos que no son fotos y evita superar el límite de adjuntos", async () => {
     mount();
     await screen.findByText(service.name);
-    const input = screen.getByLabelText("Fotos del problema");
+    const input = problemPhotoInput();
     fireEvent.change(input, { target: { files: [new File(["text"], "nota.txt", { type: "text/plain" })] } });
     expect(await screen.findByRole("alert")).toHaveTextContent("únicamente archivos de imagen");
     fireEvent.change(input, { target: { files: Array.from({ length: 6 }, (_, index) => photo(`${index}.png`)) } });

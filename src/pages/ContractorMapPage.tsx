@@ -54,6 +54,7 @@ import { PqrListView } from "../components/pqr/PqrListView";
 import { LiveSupportChatModal } from "../components/pqr/LiveSupportChatModal";
 import { MaintenanceNotice, useMaintenance } from "../components/MaintenanceNotice";
 import "./ContractorMapPage.css";
+import "../theme/tailwind.css";
 
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
